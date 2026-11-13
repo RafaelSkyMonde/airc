@@ -1,0 +1,3965 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://airc.dev/docs/schema/airc-frames.schema.json",
+ "title": "AIRC frames and HTTPS bodies",
+ "description": "JSON Schema for every AIRC frame (docs/airc-spec.md §4, §19, §21, §22, §3.4.6) and HTTPS-only body (§3.4). The root validates any frame by its `t`; `$defs` holds one entry per frame and body, plus the records and primitives they share. Frames keep `additionalProperties: true` throughout, because §3.2 says unknown fields MUST be ignored. Where a frame has two faces (`msg`), both are defined (`msgWire`, `msgClient`). Spec section references are in each description.",
+ "oneOf": [
+  {
+   "$ref": "#/$defs/hello"
+  },
+  {
+   "$ref": "#/$defs/welcome"
+  },
+  {
+   "$ref": "#/$defs/msg"
+  },
+  {
+   "$ref": "#/$defs/ack"
+  },
+  {
+   "$ref": "#/$defs/bind"
+  },
+  {
+   "$ref": "#/$defs/bound"
+  },
+  {
+   "$ref": "#/$defs/ping"
+  },
+  {
+   "$ref": "#/$defs/pong"
+  },
+  {
+   "$ref": "#/$defs/link"
+  },
+  {
+   "$ref": "#/$defs/linked"
+  },
+  {
+   "$ref": "#/$defs/passport"
+  },
+  {
+   "$ref": "#/$defs/passported"
+  },
+  {
+   "$ref": "#/$defs/error"
+  },
+  {
+   "$ref": "#/$defs/subscribe"
+  },
+  {
+   "$ref": "#/$defs/subscribed"
+  },
+  {
+   "$ref": "#/$defs/event"
+  },
+  {
+   "$ref": "#/$defs/stat"
+  },
+  {
+   "$ref": "#/$defs/stats"
+  },
+  {
+   "$ref": "#/$defs/keys"
+  },
+  {
+   "$ref": "#/$defs/keyed"
+  },
+  {
+   "$ref": "#/$defs/profile"
+  },
+  {
+   "$ref": "#/$defs/profiled"
+  },
+  {
+   "$ref": "#/$defs/displaced"
+  },
+  {
+   "$ref": "#/$defs/send"
+  },
+  {
+   "$ref": "#/$defs/sent"
+  },
+  {
+   "$ref": "#/$defs/acks"
+  },
+  {
+   "$ref": "#/$defs/acked"
+  },
+  {
+   "$ref": "#/$defs/inbox"
+  },
+  {
+   "$ref": "#/$defs/capabilities"
+  },
+  {
+   "$ref": "#/$defs/events"
+  },
+  {
+   "$ref": "#/$defs/workspace"
+  },
+  {
+   "$ref": "#/$defs/e2eKeys"
+  }
+ ],
+ "$defs": {
+  "id": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+   "description": "§4.2: a message id, or the id it answers (`re`): 1 to 128 of [A-Za-z0-9._:-]. UUIDv4 recommended.",
+   "minLength": 1,
+   "maxLength": 128
+  },
+  "mediaType": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9!#$&^_.+-]{1,64}/[A-Za-z0-9!#$&^_.+-]{1,64}(;[ ]?[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+-]+)*$",
+   "description": "§4.2: a MIME type with optional parameters and no control characters; refused otherwise like a bad id.",
+   "examples": [
+    "text/plain",
+    "application/airc-link+json",
+    "application/airc-passport+json",
+    "application/airc-e2e+json",
+    "application/airc-file+json",
+    "application/mcp+json",
+    "text/plain; charset=utf-8"
+   ]
+  },
+  "sha256hex": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$",
+   "description": "SHA-256 as exactly 64 lower-case hexadecimal digits (§22 `bin_sha256`, §12.2 `token_hash`)."
+  },
+  "kid": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{8}$",
+   "description": "§9.1: key id, the first 8 hex digits of SHA-256 over the raw 32-byte public key."
+  },
+  "base64": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+   "description": "standard base64 (RFC 4648 §4), padding allowed."
+  },
+  "base64url": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_-]+$",
+   "description": "base64url without padding (RFC 4648 §5), as in challenge ids and passport layers."
+  },
+  "sigString": {
+   "type": "string",
+   "pattern": "^[a-z0-9-]+:[0-9a-f]{8}:[A-Za-z0-9+/]+={0,2}$",
+   "not": {
+    "pattern": "^none:"
+   },
+   "description": "§9.2: `alg:kid:base64(signature)`. The grammar names only `ed25519`; the alg token is left open because §9.2 says a verifier admits any alg on its allowlist; `none` is never valid.",
+   "examples": [
+    "ed25519:65b60673:llh76U+4jzyfC45cWojF/LnHCVS8ndz0Z1XrLslBOBnBMpMrpG633xOBRenU9oEsPgQEHWf/MpAGDISMpZ3QCg=="
+   ]
+  },
+  "signatures": {
+   "description": "§9.2: `hdr.sig` is one sigstring or a list of them.",
+   "oneOf": [
+    {
+     "$ref": "#/$defs/sigString"
+    },
+    {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/sigString"
+     },
+     "minItems": 1
+    }
+   ]
+  },
+  "pin": {
+   "type": "string",
+   "pattern": "^[0-9A-Za-z]{22}$",
+   "description": "§12.1: the first 128 bits of SHA-256 over a raw public key, base62, left-padded with 0 to 22 characters."
+  },
+  "linkId": {
+   "type": "string",
+   "pattern": "^L[0-9a-f]{8}$",
+   "description": "§11.1: `L` + 8 lower-case hex."
+  },
+  "passportId": {
+   "type": "string",
+   "pattern": "^P[0-9a-f]{8}$",
+   "description": "§12.2: `P` + 8 hex."
+  },
+  "passportToken": {
+   "type": "string",
+   "pattern": "^[0-9A-Za-z]{22,64}$",
+   "description": "§12.2: at least 128 bits from a CSPRNG in base62, 22 to 64 characters."
+  },
+  "passportUrl": {
+   "type": "string",
+   "pattern": "^https://[^\\s#]+#passport=[0-9A-Za-z]+(?:\\.[0-9A-Za-z]{22})+(?:\\.r=[0-9A-Za-z]{22})?(?:~[^\\s~]+)*$",
+   "description": "§12.3 / §12.10: `https://host/scope-path#passport=token.pin[.pin…][.r=realm-pin][~layer…]`."
+  },
+  "realm": {
+   "type": "string",
+   "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])$",
+   "description": "a realm name: a DNS host (§2.1 `host`), as in `via`, `hello.realm`, `welcome.realm`."
+  },
+  "proto": {
+   "type": "string",
+   "pattern": "^airc/[0-9]+\\.[0-9]+$",
+   "description": "§4.1: `airc/<major>.<minor>`.",
+   "examples": [
+    "airc/0.1"
+   ]
+  },
+  "uriAddress": {
+   "type": "string",
+   "pattern": "^airc://(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?/(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:/[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*/?)?(?:#[A-Za-z0-9._~!$&'()*+,;=:@/?%-]*)?$",
+   "description": "§2.1 network form with the scheme: `airc://authority/path[#fragment]`; the only form on the wire (§2.3). A trailing `/` names a namespace; `airc://R/` the realm. At most 1024 octets.",
+   "maxLength": 1024
+  },
+  "networkAddress": {
+   "type": "string",
+   "pattern": "^//(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?/(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:/[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*/?)?(?:#[A-Za-z0-9._~!$&'()*+,;=:@/?%-]*)?$",
+   "description": "§2.3 `//R/p`, the URI form without its scheme; `bound` names and link `bind_to` use it.",
+   "maxLength": 1024
+  },
+  "localAddress": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:/[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*/?(?:#[A-Za-z0-9._~!$&'()*+,;=:@/?%-]*)?$",
+   "description": "§2.3 local forms a client may write: `ns/name` or `name`, resolved by the local server.",
+   "maxLength": 1024
+  },
+  "clientAddress": {
+   "description": "§2.3: any form a client may write in `from`, `to`, `as`, `peer`, `scope`: URI, network or local.",
+   "anyOf": [
+    {
+     "$ref": "#/$defs/uriAddress"
+    },
+    {
+     "$ref": "#/$defs/networkAddress"
+    },
+    {
+     "$ref": "#/$defs/localAddress"
+    }
+   ]
+  },
+  "pattern": {
+   "type": "string",
+   "pattern": "^(?:\\*|(?:airc:)?//(?:(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?|\\*)/(?:(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)/)*(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)|\\*\\*)/?)?)$",
+   "description": "§2.7: `*`, or a network-form address whose authority may be `*`, whose segments may be `*`, whose last segment may be `**`, with an optional trailing `/`.",
+   "examples": [
+    "*",
+    "//partner.example/**",
+    "//example.com/alice/*"
+   ]
+  },
+  "bindName": {
+   "type": "string",
+   "pattern": "^(?:(?:airc:)?//(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?/)?(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)/)*(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)|\\*\\*)/?$",
+   "description": "§4.3: a name relative to the realm (`alice/`, `bob/research`, `carol/*`) or absolute; `*`/`**` as in §2.7."
+  },
+  "boundName": {
+   "type": "string",
+   "pattern": "^(?:airc:)?//(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?/(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)/)*(?:(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?|\\*)|\\*\\*)/?$",
+   "description": "§4.3: an accepted absolute pattern, network form `//R/…` or URI form."
+  },
+  "timestamp": {
+   "type": "number",
+   "minimum": 0,
+   "description": "Unix seconds; fractional allowed where the field is `num`."
+  },
+  "timestampInt": {
+   "type": "integer",
+   "minimum": 0,
+   "description": "integer Unix seconds."
+  },
+  "ttl": {
+   "type": "integer",
+   "minimum": 0,
+   "description": "§4.2: seconds after `ts` the message stays deliverable; default 86400. The spec sets no fixed upper bound (a receiver refuses a ttl over its maximum, 7 days unless configured, §9.3)."
+  },
+  "ackStatus": {
+   "type": "string",
+   "enum": [
+    "delivered",
+    "queued",
+    "failed"
+   ],
+   "description": "§4.4."
+  },
+  "ackCode": {
+   "type": "string",
+   "enum": [
+    "no_such_authority",
+    "authority_unreachable",
+    "no_such_path",
+    "path_gone",
+    "not_delegated",
+    "namespace_not_endpoint",
+    "stale_instance",
+    "refused",
+    "bad_address",
+    "expired",
+    "routing_loop",
+    "no_ack",
+    "link_down",
+    "endpoint_offline",
+    "duplicate",
+    "pushed",
+    "e2e_no_key",
+    "e2e_decrypt",
+    "e2e_sender",
+    "e2e_required",
+    "bin_unsupported",
+    "bad_bin",
+    "bad_file",
+    "challenge",
+    "bad_request"
+   ],
+   "description": "§14.1 ack codes, plus `challenge` (§11.6: a failed ack that carries `challenges`)."
+  },
+  "errorCode": {
+   "type": "string",
+   "examples": [
+    "expected_hello",
+    "bad_proto",
+    "wrong_face",
+    "bad_frame",
+    "bad_json",
+    "frame_too_large",
+    "bad_bind",
+    "forbidden",
+    "unexpected_frame",
+    "no_welcome",
+    "realm_mismatch",
+    "peer_unverified",
+    "name_held",
+    "displaced",
+    "bad_bin",
+    "bin_unsupported",
+    "not_found",
+    "bad_request",
+    "bad_name",
+    "bad_key",
+    "closed",
+    "taken",
+    "key_in_use",
+    "key_taken",
+    "channel_taken",
+    "last_key",
+    "recovery_required",
+    "code_refused",
+    "bad_code",
+    "throttled"
+   ],
+   "minLength": 1,
+   "description": "§14.2 `error` frame codes. Open: over HTTPS a server may use codes of its own, and §3.4.4/§3.4.5 add registration and membership codes; the known values are listed as examples."
+  },
+  "direction": {
+   "type": "string",
+   "enum": [
+    "both",
+    "a-initiates",
+    "b-initiates"
+   ],
+   "description": "§11.1."
+  },
+  "linkState": {
+   "type": "string",
+   "enum": [
+    "pending",
+    "active",
+    "declined",
+    "revoked"
+   ],
+   "description": "§11.1, forward-only."
+  },
+  "linkAction": {
+   "type": "string",
+   "enum": [
+    "offer",
+    "accept",
+    "decline",
+    "revoke",
+    "grant"
+   ],
+   "description": "§11.4 control actions."
+  },
+  "linkOp": {
+   "type": "string",
+   "enum": [
+    "offer",
+    "accept",
+    "decline",
+    "revoke",
+    "unreject",
+    "list"
+   ],
+   "description": "§4.6."
+  },
+  "passportOp": {
+   "type": "string",
+   "enum": [
+    "new",
+    "list",
+    "revoke",
+    "redeem",
+    "key-add",
+    "key-list",
+    "key-remove",
+    "revoke-layer"
+   ],
+   "description": "§4.7."
+  },
+  "passportState": {
+   "type": "string",
+   "enum": [
+    "active",
+    "exhausted",
+    "revoked"
+   ],
+   "description": "§12.2."
+  },
+  "bindMode": {
+   "type": "string",
+   "enum": [
+    "push",
+    "webhook",
+    "pull"
+   ],
+   "description": "§3.4.2 delivery modes."
+  },
+  "frontMode": {
+   "type": "string",
+   "enum": [
+    "directory",
+    "agent",
+    "off"
+   ],
+   "description": "§20.1."
+  },
+  "endpointStatus": {
+   "type": "string",
+   "enum": [
+    "push-active",
+    "push-inactive",
+    "pull",
+    "offline"
+   ],
+   "description": "§21.2."
+  },
+  "features": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "examples": [
+     "keys",
+     "profile",
+     "leases",
+     "ws",
+     "bin",
+     "did",
+     "cards"
+    ]
+   },
+   "description": "§4.1 / §3.4.1: optional features, open list; known values in examples."
+  },
+  "segment": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?$",
+   "description": "§2.1 one address segment (a workspace or channel name)."
+  },
+  "hdr": {
+   "type": "object",
+   "description": "§4.2 extension headers, relayed untouched except as noted. Values are strings or objects, except `sig`, which §9.2 lets be a list of sigstrings. Named headers: §9 `sig`; §11.4 notice headers; §19.9 peer-key headers; §20.2 front-door headers. §6.7 `airc-receipt`: a comma-separated list of receipt types the sender asks for.",
+   "properties": {
+    "sig": {
+     "$ref": "#/$defs/signatures"
+    },
+    "airc-link": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/linkId"
+      }
+     ],
+     "description": "§11.4: the link id of a control or notice."
+    },
+    "airc-link-action": {
+     "$ref": "#/$defs/linkAction"
+    },
+    "airc-peer": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      }
+     ],
+     "description": "§11.4 notice: the other party's endpoint key."
+    },
+    "airc-passport": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportId"
+      }
+     ],
+     "description": "§11.4 notice: on a redemption notice, the passport id."
+    },
+    "airc-link-label": {
+     "type": "string",
+     "maxLength": 200,
+     "description": "§11.4 notice: the link's label, verbatim."
+    },
+    "airc-offer-credential": {
+     "type": "string",
+     "maxLength": 1000,
+     "description": "§11.4 notice: the offer's `credential` (§4.6)."
+    },
+    "airc-passport-scope": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      }
+     ],
+     "description": "§11.4 notice: the passport's scope."
+    },
+    "airc-passport-pins": {
+     "type": "string",
+     "pattern": "^[0-9A-Za-z]{22}(?:\\.[0-9A-Za-z]{22})*$",
+     "description": "§11.4 notice: the passport's pins joined by `.`."
+    },
+    "airc-peer-ik": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "§19.9: the acting endpoint's identity key, passed in the notice."
+    },
+    "airc-peer-sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "§19.9: the acting endpoint's signature over the control."
+    },
+    "airc-peer-control": {
+     "type": "object",
+     "description": "§19.9: the signed fields of a link control, for the endpoint to check.",
+     "properties": {
+      "a": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "b": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "direction": {
+       "$ref": "#/$defs/direction"
+      },
+      "expires": {
+       "$ref": "#/$defs/timestampInt"
+      },
+      "ts": {
+       "$ref": "#/$defs/timestampInt"
+      }
+     },
+     "required": [
+      "a",
+      "b",
+      "direction",
+      "ts"
+     ],
+     "additionalProperties": true
+    },
+    "airc-front": {
+     "type": "string",
+     "const": "directory",
+     "description": "§20.2: marks a directory reply."
+    },
+    "airc-directory": {
+     "type": "string",
+     "description": "§20.2: the listed agents' URIs separated by single spaces."
+    },
+    "airc-echo-of": {
+     "type": "string",
+     "description": "§20.2: marks an automatic reply; a front door does not answer it."
+    }
+   },
+   "additionalProperties": {
+    "type": [
+     "string",
+     "object"
+    ]
+   }
+  },
+  "linkRecord": {
+   "type": "object",
+   "description": "§11.1 the link record.",
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/linkId"
+    },
+    "a": {
+     "description": "§11.1: endpoint key, namespace reference or realm. `*` is the local marker of a §12.7 key refusal (`origin.reject_key`), never sent to another server.",
+     "anyOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      },
+      {
+       "const": "*"
+      }
+     ]
+    },
+    "b": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      },
+      {
+       "const": "*"
+      }
+     ]
+    },
+    "direction": {
+     "$ref": "#/$defs/direction"
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "created": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "expires": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "§11.1: null or a time after which the link has no effect."
+    },
+    "state": {
+     "$ref": "#/$defs/linkState"
+    },
+    "offered_by": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "origin": {
+     "type": "object",
+     "description": "§11.1 / §12.6 / §12.7 / §12.10: how the link came to be.",
+     "properties": {
+      "passport": {
+       "$ref": "#/$defs/passportId"
+      },
+      "scope": {
+       "type": "string",
+       "enum": [
+        "endpoint",
+        "namespace",
+        "realm"
+       ],
+       "description": "§12.6: the passport's scope kind."
+      },
+      "issued_by": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "redeemed_by": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "opt_out_of": {
+       "allOf": [
+        {
+         "$ref": "#/$defs/linkId"
+        }
+       ],
+       "description": "§12.7: the group link this record opts out of."
+      },
+      "reject_key": {
+       "allOf": [
+        {
+         "$ref": "#/$defs/pin"
+        }
+       ],
+       "description": "§12.7: the pin this record refuses."
+      },
+      "pins": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/pin"
+       },
+       "description": "§12.7: the pins of the passport that made the link."
+      },
+      "chain": {
+       "type": "array",
+       "description": "§12.10: the delegation layers, `{realm, id, pin}` each.",
+       "items": {
+        "type": "object",
+        "properties": {
+         "realm": {
+          "$ref": "#/$defs/realm"
+         },
+         "id": {
+          "type": "string"
+         },
+         "pin": {
+          "$ref": "#/$defs/pin"
+         }
+        },
+        "additionalProperties": true
+       }
+      }
+     },
+     "additionalProperties": true
+    },
+    "accepted_at": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "declined_at": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "revoked_at": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "revoked_by": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "answered": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/linkId"
+      }
+     ],
+     "description": "§12.9: a pending offer answered by a link with another id or scope."
+    }
+   },
+   "required": [
+    "id",
+    "a",
+    "b",
+    "direction",
+    "created",
+    "state"
+   ],
+   "additionalProperties": true
+  },
+  "challenge": {
+   "type": "object",
+   "description": "§11.6 one challenge alternative in a `challenges` list.",
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+     "description": "§11.6: `<base64url(body)>.<base64url(sig)>`."
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "pow",
+      "login",
+      "oauth",
+      "email",
+      "sms"
+     ]
+    },
+    "bits": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "pow: leading zero bits required."
+    },
+    "url": {
+     "type": "string",
+     "description": "login/oauth: where the user logs in."
+    },
+    "provider": {
+     "type": "string",
+     "description": "oauth: the provider."
+    },
+    "need": {
+     "type": "string",
+     "enum": [
+      "address"
+     ],
+     "description": "email/sms: the server needs the address first."
+    },
+    "sent": {
+     "type": "boolean",
+     "description": "email/sms: a code was sent; answer with `code`."
+    }
+   },
+   "required": [
+    "id",
+    "kind"
+   ],
+   "additionalProperties": true
+  },
+  "proof": {
+   "type": "object",
+   "description": "§11.6: the answer to a challenge, in a `link` offer and in `body.proof` of the control.",
+   "properties": {
+    "challenge": {
+     "type": "string"
+    },
+    "x": {
+     "type": "string"
+    },
+    "code": {
+     "type": "string"
+    },
+    "email": {
+     "type": "string"
+    },
+    "phone": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "challenge"
+   ],
+   "additionalProperties": true
+  },
+  "contact": {
+   "type": "object",
+   "description": "§11.6: `{\"email\"?, \"phone\"?}` given up front with an offer.",
+   "properties": {
+    "email": {
+     "type": "string"
+    },
+    "phone": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": true
+  },
+  "authEntry": {
+   "type": "object",
+   "description": "§12.2 / §12.4: one authorizing key and its signature over the passport's terms.",
+   "properties": {
+    "key": {
+     "$ref": "#/$defs/base64"
+    },
+    "sig": {
+     "$ref": "#/$defs/base64"
+    }
+   },
+   "required": [
+    "key",
+    "sig"
+   ],
+   "additionalProperties": true
+  },
+  "passportAuth": {
+   "type": "object",
+   "description": "§12.6 `body.passport_auth` of a grant: the signed terms and the signatures; §12.10 adds `kind`, `delegates`, `rules`, `layers` for a delegated passport.",
+   "properties": {
+    "scope": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "token_sha256": {
+     "$ref": "#/$defs/sha256hex"
+    },
+    "direction": {
+     "$ref": "#/$defs/direction"
+    },
+    "expires": {
+     "$ref": "#/$defs/timestampInt"
+    },
+    "uses": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "bind_to": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "§12.4: a pattern, or empty when none. Allowed null as well as the empty string because the canonical string writes an absent value as empty."
+    },
+    "link_ttl": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "offer": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "§12.9: the offer hash, or empty.",
+     "pattern": "^(?:[0-9a-f]{64})?$"
+    },
+    "auth": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/authEntry"
+     },
+     "minItems": 1,
+     "description": "in the passport's pin order."
+    },
+    "kind": {
+     "type": "string",
+     "const": "delegated",
+     "description": "§12.10."
+    },
+    "delegates": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "realm": {
+        "$ref": "#/$defs/realm"
+       },
+       "pins": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/pin"
+        }
+       }
+      },
+      "additionalProperties": true
+     }
+    },
+    "rules": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "§12.10: open; `depth` and `to` are defined."
+    },
+    "layers": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "§12.10: the encoded layers."
+    }
+   },
+   "required": [
+    "scope",
+    "token_sha256",
+    "direction",
+    "expires",
+    "uses",
+    "link_ttl",
+    "auth"
+   ],
+   "additionalProperties": true
+  },
+  "linkControlBody": {
+   "type": "object",
+   "description": "§11.4: the body (JSON text) of an `application/airc-link+json` message.",
+   "properties": {
+    "action": {
+     "$ref": "#/$defs/linkAction"
+    },
+    "link": {
+     "$ref": "#/$defs/linkRecord"
+    },
+    "e2e": {
+     "type": "object",
+     "description": "§19.9: the acting endpoint's identity key and, optionally, its signature.",
+     "properties": {
+      "ik": {
+       "$ref": "#/$defs/base64"
+      },
+      "sig": {
+       "$ref": "#/$defs/base64"
+      }
+     },
+     "required": [
+      "ik"
+     ],
+     "additionalProperties": true
+    },
+    "passport_auth": {
+     "$ref": "#/$defs/passportAuth"
+    },
+    "redemption": {
+     "type": "string",
+     "maxLength": 200,
+     "description": "§12.5: the redeemer's value, copied into the grant."
+    },
+    "passport": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportUrl"
+      }
+     ],
+     "description": "§12.9 step 2: an accept carries the passport."
+    },
+    "proof": {
+     "$ref": "#/$defs/proof"
+    },
+    "contact": {
+     "$ref": "#/$defs/contact"
+    }
+   },
+   "required": [
+    "action",
+    "link"
+   ],
+   "additionalProperties": true,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "grant"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "passport_auth"
+      ]
+     }
+    }
+   ]
+  },
+  "passportControlBody": {
+   "description": "§12.5 / §12.10: the body of an `application/airc-passport+json` message to `airc://R/_passport`.",
+   "oneOf": [
+    {
+     "type": "object",
+     "description": "§12.5 redeem; §12.10: `reference` and `layers` instead of `token`.",
+     "properties": {
+      "action": {
+       "const": "redeem"
+      },
+      "scope": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "token": {
+       "$ref": "#/$defs/passportToken"
+      },
+      "reference": {
+       "$ref": "#/$defs/sha256hex"
+      },
+      "layers": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "minItems": 1
+      },
+      "redeemer": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "redemption": {
+       "type": "string",
+       "maxLength": 200
+      }
+     },
+     "required": [
+      "action",
+      "scope",
+      "redeemer",
+      "redemption"
+     ],
+     "additionalProperties": true,
+     "oneOf": [
+      {
+       "required": [
+        "token"
+       ]
+      },
+      {
+       "required": [
+        "reference",
+        "layers"
+       ]
+      }
+     ]
+    },
+    {
+     "type": "object",
+     "description": "§12.10 closing: a delegate revokes a layer it issued.",
+     "properties": {
+      "action": {
+       "const": "revoke-layer"
+      },
+      "reference": {
+       "$ref": "#/$defs/sha256hex"
+      },
+      "layer": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "action",
+      "reference",
+      "layer"
+     ],
+     "additionalProperties": true
+    }
+   ]
+  },
+  "passportRecord": {
+   "type": "object",
+   "description": "§12.2 the issuer-side record; `passported` returns it without `token_hash`.",
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/passportId"
+    },
+    "token_hash": {
+     "$ref": "#/$defs/sha256hex"
+    },
+    "scope": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "direction": {
+     "$ref": "#/$defs/direction"
+    },
+    "created": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "expires": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "uses": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "used": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "redeemer": {
+        "$ref": "#/$defs/uriAddress"
+       },
+       "at": {
+        "$ref": "#/$defs/timestamp"
+       },
+       "link": {
+        "$ref": "#/$defs/linkId"
+       }
+      },
+      "additionalProperties": true
+     }
+    },
+    "bind_to": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "link_ttl": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "state": {
+     "$ref": "#/$defs/passportState"
+    },
+    "issued_by": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "auth": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/authEntry"
+     },
+     "description": "one entry per authorizing key, in pin order."
+    },
+    "offer": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "§12.9: the offer hash this passport answers."
+    },
+    "delegates": {
+     "type": "array"
+    },
+    "rules": {
+     "type": [
+      "object",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "id",
+    "scope",
+    "direction",
+    "state"
+   ],
+   "additionalProperties": true
+  },
+  "e2eKeys": {
+   "type": "object",
+   "description": "§19.2 the key record; published with `keys op=publish` or `POST /airc/v0/keys`, fetched verbatim.",
+   "properties": {
+    "t": {
+     "const": "e2e-keys"
+    },
+    "endpoint": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "ik": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "the ed25519 identity public key."
+    },
+    "keys": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "type": "object",
+      "properties": {
+       "kid": {
+        "$ref": "#/$defs/kid"
+       },
+       "x25519": {
+        "allOf": [
+         {
+          "$ref": "#/$defs/base64"
+         }
+        ],
+        "description": "the X25519 public key."
+       },
+       "not_after": {
+        "$ref": "#/$defs/timestampInt"
+       }
+      },
+      "required": [
+       "kid",
+       "x25519",
+       "not_after"
+      ],
+      "additionalProperties": true
+     }
+    },
+    "ts": {
+     "$ref": "#/$defs/timestampInt"
+    },
+    "sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "ed25519 by `ik` over the §19.2 canonical string."
+    },
+    "succession": {
+     "type": "object",
+     "description": "§19.2 identity key succession.",
+     "properties": {
+      "ik_old": {
+       "$ref": "#/$defs/base64"
+      },
+      "sig_old": {
+       "$ref": "#/$defs/base64"
+      }
+     },
+     "required": [
+      "ik_old",
+      "sig_old"
+     ],
+     "additionalProperties": true
+    },
+    "require": {
+     "type": "boolean",
+     "description": "§19.7: the endpoint accepts only encrypted messages."
+    }
+   },
+   "required": [
+    "t",
+    "endpoint",
+    "ik",
+    "keys",
+    "ts",
+    "sig"
+   ],
+   "additionalProperties": true
+  },
+  "e2eEnvelope": {
+   "type": "object",
+   "description": "§19.5 the body of an `application/airc-e2e+json` message; §19.7: servers check this shape.",
+   "properties": {
+    "v": {
+     "type": "integer",
+     "enum": [
+      1,
+      2
+     ],
+     "description": "1: `ct` holds the ciphertext; 2: the binary section does (§19.5)."
+    },
+    "suite": {
+     "const": "hpke-x25519-sha256-chacha20poly1305"
+    },
+    "kid": {
+     "$ref": "#/$defs/kid"
+    },
+    "enc": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "the HPKE encapsulated key (32 bytes)."
+    },
+    "ct": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "ciphertext with tag, at least 16 bytes (v 1 only)."
+    }
+   },
+   "required": [
+    "v",
+    "suite",
+    "kid",
+    "enc"
+   ],
+   "additionalProperties": true,
+   "if": {
+    "properties": {
+     "v": {
+      "const": 1
+     }
+    }
+   },
+   "then": {
+    "required": [
+     "ct"
+    ]
+   }
+  },
+  "e2ePlaintext": {
+   "type": "object",
+   "description": "§19.5 the sealed plaintext.",
+   "properties": {
+    "type": {
+     "$ref": "#/$defs/mediaType"
+    },
+    "body": {
+     "type": "string"
+    },
+    "re": {
+     "type": "string",
+     "description": "the `re` it carries, or empty."
+    },
+    "sender": {
+     "type": "object",
+     "properties": {
+      "ik": {
+       "$ref": "#/$defs/base64"
+      },
+      "sig": {
+       "$ref": "#/$defs/base64"
+      }
+     },
+     "required": [
+      "ik",
+      "sig"
+     ],
+     "additionalProperties": true
+    },
+    "bin": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "v 2: the inner binary section's length."
+    }
+   },
+   "required": [
+    "type",
+    "body",
+    "sender"
+   ],
+   "additionalProperties": true
+  },
+  "fileBody": {
+   "type": "object",
+   "description": "§22 the body of an `application/airc-file+json` message; the section holds the file.",
+   "properties": {
+    "v": {
+     "const": 1
+    },
+    "name": {
+     "type": "string",
+     "description": "a file name, not a path."
+    },
+    "type": {
+     "$ref": "#/$defs/mediaType"
+    },
+    "size": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "sha256": {
+     "$ref": "#/$defs/sha256hex"
+    },
+    "enc": {
+     "type": "string",
+     "enum": [
+      "identity",
+      "gzip"
+     ]
+    },
+    "note": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "v",
+    "name",
+    "type",
+    "size",
+    "sha256",
+    "enc"
+   ],
+   "additionalProperties": true
+  },
+  "eventRecord": {
+   "type": "object",
+   "description": "§13 one audit event (without `t`), as in `GET /airc/v0/events`.",
+   "properties": {
+    "ts": {
+     "$ref": "#/$defs/timestamp"
+    },
+    "kind": {
+     "type": "string",
+     "examples": [
+      "msg.delivered",
+      "msg.queued",
+      "msg.failed",
+      "msg.flushed",
+      "msg.refused",
+      "link.offer",
+      "link.accept",
+      "link.decline",
+      "link.revoke",
+      "link.grant",
+      "passport.issue",
+      "passport.new",
+      "passport.redeem",
+      "passport.revoke",
+      "peer.up",
+      "peer.down",
+      "channel.close",
+      "profile.publish",
+      "profile.delete",
+      "e2e.publish",
+      "workspace.created",
+      "workspace.deleted",
+      "workspace.join",
+      "workspace.recover",
+      "workspace.front"
+     ],
+     "description": "§13: open list; the defined kinds are the examples."
+    },
+    "id": {
+     "$ref": "#/$defs/id"
+    },
+    "from": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "to": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "status": {
+     "$ref": "#/$defs/ackStatus"
+    },
+    "code": {
+     "type": "string"
+    },
+    "reason": {
+     "type": "string"
+    },
+    "by": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "hop": {
+     "type": "string",
+     "enum": [
+      "client",
+      "peer",
+      "local",
+      "spool"
+     ]
+    },
+    "type": {
+     "$ref": "#/$defs/mediaType"
+    },
+    "re": {
+     "$ref": "#/$defs/id"
+    },
+    "bytes": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "link": {
+     "$ref": "#/$defs/linkId"
+    },
+    "passport": {
+     "$ref": "#/$defs/passportId"
+    },
+    "endpoint": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "realm": {
+     "$ref": "#/$defs/realm"
+    },
+    "authenticated": {
+     "type": "boolean"
+    },
+    "outbound": {
+     "type": "boolean"
+    },
+    "label": {
+     "type": "string"
+    },
+    "state": {
+     "type": "string"
+    },
+    "uses": {
+     "type": "integer"
+    },
+    "uses_left": {
+     "type": "integer"
+    }
+   },
+   "required": [
+    "ts",
+    "kind"
+   ],
+   "additionalProperties": true
+  },
+  "profileRecord": {
+   "type": "object",
+   "description": "§21.1 the profile record (also `POST /airc/v0/profile`'s body and `GET`'s response); `{\"endpoint\",\"delete\":true}` removes it (§21.1), `{\"endpoint\",\"close\":true}` closes the channel (§21.4).",
+   "properties": {
+    "t": {
+     "const": "profile"
+    },
+    "endpoint": {
+     "$ref": "#/$defs/uriAddress"
+    },
+    "name": {
+     "type": "string",
+     "maxLength": 64,
+     "pattern": "^[^\\r\\n]*$"
+    },
+    "about": {
+     "type": "string",
+     "maxLength": 200,
+     "pattern": "^[^\\r\\n]*$"
+    },
+    "icon": {
+     "type": "string",
+     "maxLength": 32,
+     "pattern": "^\\S*$",
+     "description": "at most 32 bytes of UTF-8 (the schema can check characters only), no whitespace."
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 2000
+    },
+    "image": {
+     "description": "a `data:` URI of type image/png, image/webp or image/jpeg, base64, at most 24 KB decoded; a server MAY return a boolean on GET.",
+     "oneOf": [
+      {
+       "type": "string",
+       "pattern": "^data:image/(?:png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$",
+       "maxLength": 33000
+      },
+      {
+       "type": "boolean"
+      }
+     ]
+    },
+    "ts": {
+     "$ref": "#/$defs/timestampInt"
+    },
+    "delete": {
+     "type": "boolean"
+    },
+    "close": {
+     "type": "boolean"
+    },
+    "status": {
+     "$ref": "#/$defs/endpointStatus"
+    },
+    "status_age": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "§21.2: seconds, on GET."
+    },
+    "skills": {
+     "type": "array",
+     "maxItems": 16,
+     "items": {
+      "$ref": "#/$defs/skill"
+     },
+     "description": "§21.1 at most 16 skills, ids unique."
+    }
+   },
+   "required": [
+    "endpoint"
+   ],
+   "additionalProperties": true,
+   "if": {
+    "not": {
+     "anyOf": [
+      {
+       "properties": {
+        "delete": {
+         "const": true
+        }
+       },
+       "required": [
+        "delete"
+       ]
+      },
+      {
+       "properties": {
+        "close": {
+         "const": true
+        }
+       },
+       "required": [
+        "close"
+       ]
+      }
+     ]
+    }
+   },
+   "then": {
+    "required": [
+     "ts"
+    ]
+   }
+  },
+  "statusEntry": {
+   "type": "object",
+   "description": "§21.2: one published status.",
+   "properties": {
+    "endpoint": {
+     "$ref": "#/$defs/clientAddress"
+    },
+    "status": {
+     "$ref": "#/$defs/endpointStatus"
+    }
+   },
+   "required": [
+    "endpoint",
+    "status"
+   ],
+   "additionalProperties": true
+  },
+  "directoryEntry": {
+   "type": "object",
+   "description": "§20.2: a directory entry a workspace adds or hides.",
+   "properties": {
+    "agent": {
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    },
+    "hidden": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "agent"
+   ],
+   "additionalProperties": true
+  },
+  "hello": {
+   "type": "object",
+   "description": "§4.1 `hello`, from the connecting side; first frame of a stream connection (§3.3).",
+   "properties": {
+    "t": {
+     "const": "hello",
+     "description": "frame type (§3.2)"
+    },
+    "proto": {
+     "$ref": "#/$defs/proto"
+    },
+    "role": {
+     "type": "string",
+     "enum": [
+      "client",
+      "peer"
+     ]
+    },
+    "agent": {
+     "type": "string",
+     "description": "software name/version, informational."
+    },
+    "features": {
+     "$ref": "#/$defs/features"
+    },
+    "realm": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/realm"
+      }
+     ],
+     "description": "peer: the connecting server's realm (required)."
+    },
+    "ts": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/timestampInt"
+      }
+     ],
+     "description": "peer, signed: Unix seconds when the hello was made."
+    },
+    "nonce": {
+     "type": "string",
+     "minLength": 1,
+     "description": "peer: random, at least 12 bytes of entropy, hex or base64. §4.1 asks for ≥12 bytes of entropy, which a schema cannot check."
+    },
+    "sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/sigString"
+      }
+     ],
+     "description": "peer: signature over the hello (§9.4)."
+    },
+    "ns": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "client: namespace claim; servers MUST ignore it unless configured (tests only)."
+    }
+   },
+   "required": [
+    "t",
+    "proto",
+    "role"
+   ],
+   "additionalProperties": true,
+   "if": {
+    "properties": {
+     "role": {
+      "const": "peer"
+     }
+    }
+   },
+   "then": {
+    "required": [
+     "realm"
+    ]
+   }
+  },
+  "welcome": {
+   "type": "object",
+   "description": "§4.1 `welcome`, from the accepting side; §3.4.6: the first WebSocket message, with `push`.",
+   "properties": {
+    "t": {
+     "const": "welcome",
+     "description": "frame type (§3.2)"
+    },
+    "realm": {
+     "$ref": "#/$defs/realm"
+    },
+    "proto": {
+     "$ref": "#/$defs/proto"
+    },
+    "server": {
+     "type": "string",
+     "description": "software name/version."
+    },
+    "ns": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "client face (required there): namespaces this connection may act for (§5); empty = anonymous."
+    },
+    "sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/sigString"
+      }
+     ],
+     "description": "peer face: signature over the welcome (§9.4)."
+    },
+    "kid": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/kid"
+      }
+     ],
+     "description": "peer face: key id of `sig`."
+    },
+    "features": {
+     "$ref": "#/$defs/features"
+    },
+    "push": {
+     "const": "ws",
+     "description": "§3.4.6: the WebSocket welcome."
+    }
+   },
+   "required": [
+    "t",
+    "realm",
+    "proto"
+   ],
+   "additionalProperties": true
+  },
+  "msg": {
+   "type": "object",
+   "description": "§4.2 `msg`, address form unconstrained: the union of `msgWire` (peer face) and `msgClient` (client face). `bin` and `bin_sha256` come together (§22).",
+   "properties": {
+    "t": {
+     "const": "msg",
+     "description": "frame type (§3.2)"
+    },
+    "id": {
+     "$ref": "#/$defs/id"
+    },
+    "from": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "origin endpoint; any form here, see msgWire/msgClient."
+    },
+    "to": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "destination; any form here."
+    },
+    "ts": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/timestamp"
+      }
+     ],
+     "description": "origin time, Unix seconds (fractional allowed); required on the peer face."
+    },
+    "body": {
+     "type": "string",
+     "description": "the text."
+    },
+    "type": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/mediaType"
+      }
+     ],
+     "default": "text/plain"
+    },
+    "re": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/id"
+      }
+     ],
+     "description": "the full id of the message this answers."
+    },
+    "ttl": {
+     "$ref": "#/$defs/ttl"
+    },
+    "via": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/realm"
+     },
+     "maxItems": 8,
+     "description": "realms traversed; set by servers (§6.5); at most 8 hops (§15)."
+    },
+    "hdr": {
+     "$ref": "#/$defs/hdr"
+    },
+    "bin": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 8388608,
+     "description": "§22: length of the binary section after the line."
+    },
+    "bin_sha256": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/sha256hex"
+      }
+     ],
+     "description": "§22: the section's SHA-256."
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "from",
+    "to",
+    "body"
+   ],
+   "additionalProperties": true,
+   "dependentRequired": {
+    "bin": [
+     "bin_sha256"
+    ],
+    "bin_sha256": [
+     "bin"
+    ]
+   }
+  },
+  "msgWire": {
+   "description": "§4.2 + §2.3: a `msg` on the wire (peer face, inbox, WebSocket pushes, notices): URI-form `from` and `to`, `ts` required.",
+   "allOf": [
+    {
+     "$ref": "#/$defs/msg"
+    },
+    {
+     "properties": {
+      "from": {
+       "$ref": "#/$defs/uriAddress"
+      },
+      "to": {
+       "$ref": "#/$defs/uriAddress"
+      }
+     },
+     "required": [
+      "ts"
+     ]
+    }
+   ]
+  },
+  "msgClient": {
+   "description": "§4.2 + §2.3: a `msg` as a client may send it (stream client face, `POST /airc/v0/send`, WebSocket `send`): local forms allowed, `ts` optional (a server MAY set it).",
+   "allOf": [
+    {
+     "$ref": "#/$defs/msg"
+    },
+    {
+     "properties": {
+      "from": {
+       "$ref": "#/$defs/clientAddress"
+      },
+      "to": {
+       "$ref": "#/$defs/clientAddress"
+      }
+     }
+    }
+   ]
+  },
+  "ack": {
+   "type": "object",
+   "description": "§4.4 `ack`: exactly one per accepted `msg`; §11.6 adds `challenges`; §3.4.6 adds `rid` on the socket.",
+   "properties": {
+    "t": {
+     "const": "ack",
+     "description": "frame type (§3.2)"
+    },
+    "id": {
+     "$ref": "#/$defs/id"
+    },
+    "status": {
+     "$ref": "#/$defs/ackStatus"
+    },
+    "code": {
+     "$ref": "#/$defs/ackCode"
+    },
+    "by": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      }
+     ],
+     "description": "URI of the resolver that produced the status."
+    },
+    "reason": {
+     "type": "string",
+     "description": "human-readable."
+    },
+    "challenges": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/challenge"
+     },
+     "minItems": 1,
+     "description": "§11.6: alternatives, any one suffices; with code `challenge`."
+    },
+    "rid": {
+     "type": "string",
+     "description": "§3.4.6: the client's request id, repeated in the reply."
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "status"
+   ],
+   "additionalProperties": true
+  },
+  "bind": {
+   "type": "object",
+   "description": "§4.3 `bind` (client face). Over HTTPS the body may omit `t` (§3.4.2): see `bindRequest`.",
+   "properties": {
+    "t": {
+     "const": "bind",
+     "description": "frame type (§3.2)"
+    },
+    "names": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/bindName"
+     },
+     "description": "§4.3: names relative to the realm; `[]` releases (§4.3.1)."
+    },
+    "take_over": {
+     "type": "boolean",
+     "description": "§4.3.1: displace the holder."
+    },
+    "mode": {
+     "$ref": "#/$defs/bindMode"
+    },
+    "webhook": {
+     "type": "string",
+     "pattern": "^https://",
+     "description": "§3.4.2: the URL for `webhook` mode."
+    }
+   },
+   "required": [
+    "t",
+    "names"
+   ],
+   "additionalProperties": true
+  },
+  "bindRequest": {
+   "type": "object",
+   "description": "§3.4.2 the body of `POST /airc/v0/bind`: the `bind` frame's fields, `t` optional.",
+   "properties": {
+    "t": {
+     "const": "bind"
+    },
+    "names": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/bindName"
+     },
+     "description": "§4.3: names relative to the realm; `[]` releases (§4.3.1)."
+    },
+    "take_over": {
+     "type": "boolean",
+     "description": "§4.3.1: displace the holder."
+    },
+    "mode": {
+     "$ref": "#/$defs/bindMode"
+    },
+    "webhook": {
+     "type": "string",
+     "pattern": "^https://",
+     "description": "§3.4.2: the URL for `webhook` mode."
+    }
+   },
+   "required": [
+    "names"
+   ],
+   "additionalProperties": true
+  },
+  "bound": {
+   "type": "object",
+   "description": "§4.3 `bound`; §3.4.2 adds `mode`; §4.3.1 `displaced`; §20.3 `front`.",
+   "properties": {
+    "t": {
+     "const": "bound",
+     "description": "frame type (§3.2)"
+    },
+    "names": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/boundName"
+     },
+     "description": "the accepted absolute patterns."
+    },
+    "mode": {
+     "$ref": "#/$defs/bindMode"
+    },
+    "displaced": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/boundName"
+     },
+     "description": "§4.3.1: patterns another session took over."
+    },
+    "front": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string"
+     },
+     "description": "§20.3: `{\"<ws>\": \"<agent>\"}` front-door agents."
+    }
+   },
+   "required": [
+    "t",
+    "names"
+   ],
+   "additionalProperties": true
+  },
+  "ping": {
+   "type": "object",
+   "description": "§4.5 `ping`; `n` is optional and echoed (untyped in the spec; the example uses an integer). §3.4.6: `rid` on the socket; the server's keep-alive is `{\"t\":\"ping\"}`.",
+   "properties": {
+    "t": {
+     "const": "ping",
+     "description": "frame type (§3.2)"
+    },
+    "n": {
+     "type": [
+      "integer",
+      "string"
+     ]
+    },
+    "rid": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "pong": {
+   "type": "object",
+   "description": "§4.5 `pong`; echoes `n`; §3.4.6 `rid`.",
+   "properties": {
+    "t": {
+     "const": "pong",
+     "description": "frame type (§3.2)"
+    },
+    "n": {
+     "type": [
+      "integer",
+      "string"
+     ]
+    },
+    "rid": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "link": {
+   "type": "object",
+   "description": "§4.6 `link` (client face): manages links (§11).",
+   "properties": {
+    "t": {
+     "const": "link",
+     "description": "frame type (§3.2)"
+    },
+    "op": {
+     "$ref": "#/$defs/linkOp"
+    },
+    "as": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "the acting endpoint (local form allowed); all ops but `list` (and `list` on a hosted realm)."
+    },
+    "peer": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "offer: the other endpoint."
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "proof": {
+     "$ref": "#/$defs/proof"
+    },
+    "contact": {
+     "$ref": "#/$defs/contact"
+    },
+    "credential": {
+     "type": "string",
+     "maxLength": 1000,
+     "description": "offer: opaque, passed on unaltered."
+    },
+    "direction": {
+     "$ref": "#/$defs/direction"
+    },
+    "expires": {
+     "description": "offer: lifetime in seconds, or `30d`/`12h`/`45m`/`2w`; absent: the link does not expire.",
+     "oneOf": [
+      {
+       "type": "integer",
+       "minimum": 0
+      },
+      {
+       "type": "string",
+       "pattern": "^[0-9]+[smhdw]?$"
+      }
+     ]
+    },
+    "id": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/linkId"
+      }
+     ],
+     "description": "accept/decline/revoke: the link id; offer: optional, chosen by a signing client."
+    },
+    "ts": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/timestamp"
+      }
+     ],
+     "description": "the timestamp the client signed (§19.9)."
+    },
+    "expires_at": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/timestampInt"
+      }
+     ],
+     "description": "offer: the absolute expiry the client signed."
+    },
+    "sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "the acting endpoint's identity-key signature over the control (§19.9), bare base64."
+    },
+    "token": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportToken"
+      }
+     ],
+     "description": "accept: the passport token the accepting client signed (§12.9)."
+    },
+    "link_ttl": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "accept: link lifetime in seconds."
+    },
+    "auth": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/authEntry"
+     },
+     "description": "accept: signatures over the §12.4 canonical string."
+    },
+    "key": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/pin"
+      }
+     ],
+     "description": "revoke/unreject: a pin to refuse, or stop refusing (§12.7)."
+    },
+    "all": {
+     "type": "boolean",
+     "description": "list: administrator connections only."
+    }
+   },
+   "required": [
+    "t",
+    "op"
+   ],
+   "additionalProperties": true,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "offer"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "peer"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "enum": [
+         "accept",
+         "decline"
+        ]
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "id"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "revoke"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as"
+      ],
+      "anyOf": [
+       {
+        "required": [
+         "id"
+        ]
+       },
+       {
+        "required": [
+         "key"
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "unreject"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "key"
+      ]
+     }
+    }
+   ]
+  },
+  "linked": {
+   "type": "object",
+   "description": "§4.6 `linked`; §11.6: `challenges` with code `challenge`.",
+   "properties": {
+    "t": {
+     "const": "linked",
+     "description": "frame type (§3.2)"
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "link": {
+     "$ref": "#/$defs/linkRecord"
+    },
+    "links": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/linkRecord"
+     },
+     "description": "for `list`."
+    },
+    "closed": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/linkId"
+     },
+     "description": "revoke with `key`: the links the refusal closed."
+    },
+    "kept": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/linkId"
+     },
+     "description": "revoke with `key`: links site policy keeps (must-accept)."
+    },
+    "delivery": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/ackStatus"
+      }
+     ],
+     "description": "ack status of the control message sent to the other side."
+    },
+    "reason": {
+     "type": "string"
+    },
+    "code": {
+     "type": "string",
+     "description": "on failure; open."
+    },
+    "challenges": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/challenge"
+     }
+    }
+   },
+   "required": [
+    "t",
+    "ok"
+   ],
+   "additionalProperties": true
+  },
+  "passport": {
+   "type": "object",
+   "description": "§4.7 `passport` (client face): manages passports (§12).",
+   "properties": {
+    "t": {
+     "const": "passport",
+     "description": "frame type (§3.2)"
+    },
+    "op": {
+     "$ref": "#/$defs/passportOp"
+    },
+    "as": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "the acting endpoint; for `redeem` possibly a namespace (trailing `/`)."
+    },
+    "scope": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "new/key-add/key-remove: endpoint, namespace (trailing `/`) or realm; default `as`."
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "token": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportToken"
+      }
+     ],
+     "description": "new (required): the token the client generated (§12.2)."
+    },
+    "expires_at": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/timestampInt"
+      }
+     ],
+     "description": "new (required): the absolute expiry the client signed."
+    },
+    "uses": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "new: redemptions allowed (default 1, cap 100)."
+    },
+    "direction": {
+     "$ref": "#/$defs/direction"
+    },
+    "to": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/pattern"
+      }
+     ],
+     "description": "new: the pattern the redeemer must match (`bind_to`)."
+    },
+    "link_ttl": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "new: lifetime of created links, seconds."
+    },
+    "for_offer": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/linkId"
+      }
+     ],
+     "description": "new: a pending offer's link id (§12.9)."
+    },
+    "offer": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/sha256hex"
+      }
+     ],
+     "description": "new: the offer hash the client signed."
+    },
+    "auth": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/authEntry"
+     },
+     "description": "new: signatures over the terms (§12.4); may be empty."
+    },
+    "key": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "key-add/key-remove: a public key to entitle."
+    },
+    "id": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportId"
+      }
+     ],
+     "description": "revoke: the passport id."
+    },
+    "and_links": {
+     "type": "boolean",
+     "description": "revoke: also revoke every link the passport created."
+    },
+    "passport": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportUrl"
+      }
+     ],
+     "description": "redeem: the passport (§12.3)."
+    },
+    "all": {
+     "type": "boolean",
+     "description": "list: administrators."
+    }
+   },
+   "required": [
+    "t",
+    "op"
+   ],
+   "additionalProperties": true,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "new"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "token",
+       "expires_at"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "redeem"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "passport"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "revoke"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "id"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "enum": [
+         "key-add",
+         "key-remove"
+        ]
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "as",
+       "key"
+      ]
+     }
+    }
+   ]
+  },
+  "passported": {
+   "type": "object",
+   "description": "§4.7 `passported`.",
+   "properties": {
+    "t": {
+     "const": "passported",
+     "description": "frame type (§3.2)"
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "passport": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportRecord"
+      }
+     ],
+     "description": "new/revoke: the record without the token hash."
+    },
+    "url": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/passportUrl"
+      }
+     ],
+     "description": "new: the passport."
+    },
+    "passports": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/passportRecord"
+     },
+     "description": "list."
+    },
+    "status": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/ackStatus"
+      }
+     ],
+     "description": "redeem: the redemption ack's status."
+    },
+    "reason": {
+     "type": "string"
+    },
+    "code": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "redeem: the ack code; on failure."
+    },
+    "link": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/linkRecord"
+      }
+     ],
+     "description": "redeem: the link on success."
+    },
+    "revoked_links": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/linkId"
+     },
+     "description": "revoke with `and_links`."
+    },
+    "keys": {
+     "type": "array",
+     "description": "key-list: `{scope, key, pin, set_by}` each.",
+     "items": {
+      "type": "object",
+      "properties": {
+       "scope": {
+        "$ref": "#/$defs/uriAddress"
+       },
+       "key": {
+        "$ref": "#/$defs/base64"
+       },
+       "pin": {
+        "$ref": "#/$defs/pin"
+       },
+       "set_by": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "scope",
+       "key",
+       "pin"
+      ],
+      "additionalProperties": true
+     }
+    }
+   },
+   "required": [
+    "t",
+    "ok"
+   ],
+   "additionalProperties": true
+  },
+  "error": {
+   "type": "object",
+   "description": "§4.8 `error`, sent before closing a stream connection; §3.4 the body of a non-200 HTTPS response; §3.4.6 a WebSocket reply with `rid`. A 409 `name_held` body also carries `error`, `name`, `idle`, `suggest` (§4.3.1): see `nameHeldError`. `code` on the stream (§4.8); a 409 body on the HTTPS binding carries it as `error` (§3.4.2).",
+   "properties": {
+    "t": {
+     "const": "error",
+     "description": "frame type (§3.2)"
+    },
+    "code": {
+     "$ref": "#/$defs/errorCode"
+    },
+    "reason": {
+     "type": "string"
+    },
+    "rid": {
+     "type": "string"
+    },
+    "error": {
+     "type": "string",
+     "description": "§3.4.2: a 409 name_held/channel_taken body carries its code here"
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true,
+   "anyOf": [
+    {
+     "required": [
+      "code"
+     ]
+    },
+    {
+     "required": [
+      "error"
+     ]
+    }
+   ]
+  },
+  "nameHeldError": {
+   "type": "object",
+   "description": "§4.3.1: the HTTP 409 body of a refused bind: `{\"error\":\"name_held\",\"name\":<pattern>,\"idle\":<s>,\"suggest\":<name>}`; `t` is not stated there.",
+   "properties": {
+    "t": {
+     "const": "error"
+    },
+    "error": {
+     "type": "string",
+     "enum": [
+      "name_held",
+      "channel_taken"
+     ]
+    },
+    "name": {
+     "type": "string"
+    },
+    "idle": {
+     "type": "number",
+     "minimum": 0
+    },
+    "suggest": {
+     "type": "string"
+    },
+    "code": {
+     "type": "string"
+    },
+    "reason": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "error"
+   ],
+   "additionalProperties": true
+  },
+  "subscribe": {
+   "type": "object",
+   "description": "§4.9 `subscribe` (client face): live audit stream (§13).",
+   "properties": {
+    "t": {
+     "const": "subscribe",
+     "description": "frame type (§3.2)"
+    },
+    "kinds": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "full kinds or prefixes (`msg`)."
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "subscribed": {
+   "type": "object",
+   "description": "§4.9 `subscribed`.",
+   "properties": {
+    "t": {
+     "const": "subscribed",
+     "description": "frame type (§3.2)"
+    },
+    "kinds": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "scope": {
+     "description": "the namespaces the subscriber sees, or `all` for an administrator.",
+     "oneOf": [
+      {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      {
+       "const": "all"
+      }
+     ]
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "event": {
+   "description": "§4.9 / §13 `event`: an audit record with `t`.",
+   "allOf": [
+    {
+     "$ref": "#/$defs/eventRecord"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "t": {
+       "const": "event"
+      }
+     },
+     "required": [
+      "t"
+     ]
+    }
+   ]
+  },
+  "stat": {
+   "type": "object",
+   "description": "§4.10 `stat`: a client asks for counters.",
+   "properties": {
+    "t": {
+     "const": "stat",
+     "description": "frame type (§3.2)"
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "stats": {
+   "type": "object",
+   "description": "§4.10 `stats`: implementation-defined counters.",
+   "properties": {
+    "t": {
+     "const": "stats",
+     "description": "frame type (§3.2)"
+    },
+    "realm": {
+     "$ref": "#/$defs/realm"
+    },
+    "uptime": {
+     "type": "number"
+    },
+    "counters": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "keys": {
+   "type": "object",
+   "description": "§19.3 `keys` (stream client face): publish or get an end-to-end key record.",
+   "properties": {
+    "t": {
+     "const": "keys",
+     "description": "frame type (§3.2)"
+    },
+    "op": {
+     "type": "string",
+     "enum": [
+      "publish",
+      "get"
+     ]
+    },
+    "record": {
+     "$ref": "#/$defs/e2eKeys"
+    },
+    "endpoint": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/clientAddress"
+      }
+     ],
+     "description": "get: the endpoint, in any realm."
+    }
+   },
+   "required": [
+    "t",
+    "op"
+   ],
+   "additionalProperties": true,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "publish"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "record"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "get"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "endpoint"
+      ]
+     }
+    }
+   ]
+  },
+  "keyed": {
+   "type": "object",
+   "description": "§19.3 `keyed`: the reply to `keys` and to `POST /airc/v0/keys`.",
+   "properties": {
+    "t": {
+     "const": "keyed",
+     "description": "frame type (§3.2)"
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "record": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/e2eKeys"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "reason": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "t",
+    "ok"
+   ],
+   "additionalProperties": true
+  },
+  "profile": {
+   "type": "object",
+   "description": "§21.1 / §21.2 `profile` (stream client face): `op` publish (with `record`), get (with `endpoint`) or status (with `statuses`). Without `op` it is the profile record itself (§21.1 `{\"t\":\"profile\",\"endpoint\":…}`).",
+   "properties": {
+    "t": {
+     "const": "profile",
+     "description": "frame type (§3.2)"
+    },
+    "op": {
+     "type": "string",
+     "enum": [
+      "publish",
+      "get",
+      "status"
+     ]
+    },
+    "record": {
+     "$ref": "#/$defs/profileRecord"
+    },
+    "endpoint": {
+     "$ref": "#/$defs/clientAddress"
+    },
+    "statuses": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/statusEntry"
+     }
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true,
+   "if": {
+    "required": [
+     "op"
+    ]
+   },
+   "then": {
+    "allOf": [
+     {
+      "if": {
+       "properties": {
+        "op": {
+         "const": "publish"
+        }
+       }
+      },
+      "then": {
+       "required": [
+        "record"
+       ]
+      }
+     },
+     {
+      "if": {
+       "properties": {
+        "op": {
+         "const": "get"
+        }
+       }
+      },
+      "then": {
+       "required": [
+        "endpoint"
+       ]
+      }
+     },
+     {
+      "if": {
+       "properties": {
+        "op": {
+         "const": "status"
+        }
+       }
+      },
+      "then": {
+       "required": [
+        "statuses"
+       ]
+      }
+     }
+    ]
+   },
+   "else": {
+    "$ref": "#/$defs/profileRecord"
+   }
+  },
+  "profiled": {
+   "type": "object",
+   "description": "§21.1 `profiled`.",
+   "properties": {
+    "t": {
+     "const": "profiled",
+     "description": "frame type (§3.2)"
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "reason": {
+     "type": "string"
+    },
+    "record": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/profileRecord"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "required": [
+    "t",
+    "ok"
+   ],
+   "additionalProperties": true
+  },
+  "displaced": {
+   "type": "object",
+   "description": "§4.3.1 / §3.4.6 `displaced`: another session took these names over.",
+   "properties": {
+    "t": {
+     "const": "displaced",
+     "description": "frame type (§3.2)"
+    },
+    "names": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/boundName"
+     }
+    }
+   },
+   "required": [
+    "t",
+    "names"
+   ],
+   "additionalProperties": true
+  },
+  "send": {
+   "type": "object",
+   "description": "§3.4.6 `send` (client → server over the WebSocket): one `msg` in `msg`.",
+   "properties": {
+    "t": {
+     "const": "send",
+     "description": "frame type (§3.2)"
+    },
+    "rid": {
+     "type": "string"
+    },
+    "msg": {
+     "$ref": "#/$defs/msgClient"
+    }
+   },
+   "required": [
+    "t",
+    "msg"
+   ],
+   "additionalProperties": true
+  },
+  "sent": {
+   "type": "object",
+   "description": "§3.4.6 `sent`: the `ack` `POST /send` would return.",
+   "properties": {
+    "t": {
+     "const": "sent",
+     "description": "frame type (§3.2)"
+    },
+    "rid": {
+     "type": "string"
+    },
+    "ack": {
+     "$ref": "#/$defs/ack"
+    }
+   },
+   "required": [
+    "t",
+    "ack"
+   ],
+   "additionalProperties": true
+  },
+  "acks": {
+   "type": "object",
+   "description": "§3.4.6 `acks`: a list of acks over the WebSocket.",
+   "properties": {
+    "t": {
+     "const": "acks",
+     "description": "frame type (§3.2)"
+    },
+    "rid": {
+     "type": "string"
+    },
+    "list": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/ack"
+     }
+    }
+   },
+   "required": [
+    "t",
+    "list"
+   ],
+   "additionalProperties": true
+  },
+  "acked": {
+   "type": "object",
+   "description": "§3.4.2 / §3.4.6 `acked`: how many acks were taken.",
+   "properties": {
+    "t": {
+     "const": "acked",
+     "description": "frame type (§3.2)"
+    },
+    "n": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "rid": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "t",
+    "n"
+   ],
+   "additionalProperties": true
+  },
+  "inbox": {
+   "type": "object",
+   "description": "§3.4.2 the `GET /airc/v0/inbox` response: queued wire-form messages, oldest first; §4.3.1 `displaced`. §3.4.6: `{\"t\":\"inbox\"}` alone over the WebSocket means more is waiting.",
+   "properties": {
+    "t": {
+     "const": "inbox",
+     "description": "frame type (§3.2)"
+    },
+    "msgs": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/msgWire"
+     },
+     "maxItems": 200
+    },
+    "displaced": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/boundName"
+     }
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "capabilities": {
+   "type": "object",
+   "description": "§3.4.1 the capabilities document at `GET /.well-known/airc?nonce=`.",
+   "properties": {
+    "t": {
+     "const": "capabilities",
+     "description": "frame type (§3.2)"
+    },
+    "realm": {
+     "$ref": "#/$defs/realm"
+    },
+    "proto": {
+     "$ref": "#/$defs/proto"
+    },
+    "bindings": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "https",
+       "stream"
+      ]
+     },
+     "minItems": 1
+    },
+    "kids": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/kid"
+     },
+     "description": "the realm's signing key ids (protected by TLS only)."
+    },
+    "nonce": {
+     "type": "string",
+     "description": "echoed from the request."
+    },
+    "ts": {
+     "$ref": "#/$defs/timestampInt"
+    },
+    "sig": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/sigString"
+      }
+     ],
+     "description": "over `airc-capabilities\\n<realm>\\n<nonce>\\n<ts>`."
+    },
+    "features": {
+     "$ref": "#/$defs/features"
+    },
+    "server": {
+     "type": "string"
+    },
+    "did": {
+     "type": "string",
+     "pattern": "^did:web:",
+     "description": "§3.4.1 / §24: the realm's DID, when it serves a DID document."
+    }
+   },
+   "required": [
+    "t",
+    "realm",
+    "proto",
+    "bindings",
+    "kids",
+    "nonce",
+    "ts",
+    "sig"
+   ],
+   "additionalProperties": true
+  },
+  "ackList": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/ack"
+   },
+   "description": "§3.4.2 the body of `POST /airc/v0/ack`: a list of ack frames."
+  },
+  "events": {
+   "type": "object",
+   "description": "§3.4.2 the `GET /airc/v0/events?since=&kinds=` response.",
+   "properties": {
+    "t": {
+     "const": "events",
+     "description": "frame type (§3.2)"
+    },
+    "events": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/eventRecord"
+     }
+    }
+   },
+   "required": [
+    "t",
+    "events"
+   ],
+   "additionalProperties": true
+  },
+  "statusRequest": {
+   "type": "object",
+   "description": "§21.2 the body of `POST /airc/v0/profile/status`.",
+   "properties": {
+    "statuses": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/statusEntry"
+     }
+    }
+   },
+   "required": [
+    "statuses"
+   ],
+   "additionalProperties": true
+  },
+  "workspaceRegister": {
+   "type": "object",
+   "description": "§3.4.4 the body of `POST /airc/v0/workspaces`.",
+   "properties": {
+    "name": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/segment"
+      }
+     ],
+     "not": {
+      "pattern": "^_"
+     },
+     "description": "one segment, not starting with `_`."
+    },
+    "pub": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/base64"
+      }
+     ],
+     "description": "the raw 32-byte ed25519 public key, base64."
+    },
+    "label": {
+     "type": "string"
+    },
+    "recovery": {
+     "type": "boolean",
+     "description": "adds a recovery code to the response (§3.4.5)."
+    }
+   },
+   "required": [
+    "name",
+    "pub"
+   ],
+   "additionalProperties": true
+  },
+  "workspaceJoin": {
+   "type": "object",
+   "description": "§3.4.5 the body of `POST /airc/v0/workspaces/join`.",
+   "properties": {
+    "code": {
+     "type": "string",
+     "pattern": "^airc-(?:join|recover):1;i=[^;]+;w=[^;]+;t=[0-9A-Za-z]+$",
+     "description": "a join or recovery code (§3.4.5 grammar)."
+    },
+    "pub": {
+     "$ref": "#/$defs/base64"
+    },
+    "label": {
+     "type": "string"
+    },
+    "revoke_others": {
+     "type": "boolean"
+    },
+    "channel": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/segment"
+      }
+     ],
+     "description": "required with an enrollment code."
+    }
+   },
+   "required": [
+    "code",
+    "pub"
+   ],
+   "additionalProperties": true
+  },
+  "workspaceOp": {
+   "description": "§3.4.5 the body of `POST /airc/v0/workspace`, by `op`. `front` (§20.1 names a hosted realm's `front` action; its fields are not in the §3.4.5 table) is admitted loosely.",
+   "type": "object",
+   "required": [
+    "op"
+   ],
+   "additionalProperties": true,
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "join-code",
+      "revoke-join",
+      "revoke-key",
+      "recovery-code",
+      "delete",
+      "front"
+     ]
+    }
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "join-code"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "label": {
+        "type": "string"
+       },
+       "uses": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+       },
+       "expires": {
+        "type": [
+         "integer",
+         "string"
+        ],
+        "description": "at most 7 days for a plain code."
+       },
+       "channel": {
+        "$ref": "#/$defs/segment"
+       },
+       "enroll": {
+        "type": "boolean"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "revoke-join"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "id"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^J"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "revoke-key"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "kid"
+      ],
+      "properties": {
+       "kid": {
+        "$ref": "#/$defs/kid"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "recovery-code"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "recovery": {
+        "type": "string",
+        "pattern": "^airc-recover:1;"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "delete"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "confirm"
+      ],
+      "properties": {
+       "confirm": {
+        "type": "string",
+        "description": "must repeat the workspace's name."
+       },
+       "recovery": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "front"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "mode": {
+        "$ref": "#/$defs/frontMode"
+       },
+       "agent": {
+        "type": "string"
+       },
+       "about": {
+        "type": "string",
+        "maxLength": 300
+       },
+       "entries": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/directoryEntry"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  "workspace": {
+   "type": "object",
+   "description": "§3.4.4 / §3.4.5 / §20.3 the `workspace` response: registration and join (`realm`, `ns`, `kid`, `uri`, …), `GET /airc/v0/workspace` (`keys`, `joins`, `recovery`, front-door fields; a channel key sees `realm`, `ns`, `channel` only), and the `join-code` op (`ok`, `id`, `code`, `kind`). Other op responses (`{\"ok\":true,…}`, `t` unstated): `workspaceOpResult`.",
+   "properties": {
+    "t": {
+     "const": "workspace",
+     "description": "frame type (§3.2)"
+    },
+    "realm": {
+     "$ref": "#/$defs/realm"
+    },
+    "ns": {
+     "$ref": "#/$defs/segment"
+    },
+    "kid": {
+     "$ref": "#/$defs/kid"
+    },
+    "uri": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/uriAddress"
+      }
+     ],
+     "description": "`airc://<realm>/<ns>/`."
+    },
+    "channel": {
+     "$ref": "#/$defs/segment"
+    },
+    "temporary": {
+     "type": "boolean",
+     "description": "§3.4.4: a `tmp-` name that expires after 1 idle day."
+    },
+    "expires_after_idle_days": {
+     "type": "number"
+    },
+    "expires_after_idle_s": {
+     "type": "number"
+    },
+    "terms": {
+     "type": "string"
+    },
+    "privacy": {
+     "type": "string"
+    },
+    "terms_accepted": {},
+    "terms_note": {
+     "type": "string"
+    },
+    "recovery": {
+     "type": [
+      "string",
+      "boolean"
+     ],
+     "description": "a new recovery code (registration with `recovery`, join with a recovery code), or on GET whether one exists."
+    },
+    "keys": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "kid": {
+        "$ref": "#/$defs/kid"
+       },
+       "label": {
+        "type": "string"
+       },
+       "added": {
+        "type": "number"
+       },
+       "added_by": {
+        "type": "string",
+        "description": "`registration`, `join <id>` or `recovery`."
+       }
+      },
+      "required": [
+       "kid"
+      ],
+      "additionalProperties": true
+     }
+    },
+    "joins": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "label": {
+        "type": "string"
+       },
+       "uses": {
+        "type": [
+         "integer",
+         "null"
+        ]
+       },
+       "used": {
+        "type": "integer"
+       },
+       "expires": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "required": [
+       "id"
+      ],
+      "additionalProperties": true
+     }
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "id": {
+     "type": "string",
+     "description": "join-code: `J…`."
+    },
+    "code": {
+     "type": "string",
+     "pattern": "^airc-join:1;",
+     "description": "join-code: the code, shown once."
+    },
+    "kind": {
+     "type": "string",
+     "description": "join-code: `channel` or `enroll` for a channel/enrollment code."
+    },
+    "front": {
+     "$ref": "#/$defs/frontMode"
+    },
+    "front_agent": {
+     "type": "string"
+    },
+    "front_about": {
+     "type": "string",
+     "maxLength": 300
+    },
+    "front_entries": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/directoryEntry"
+     }
+    }
+   },
+   "required": [
+    "t"
+   ],
+   "additionalProperties": true
+  },
+  "workspaceOpResult": {
+   "type": "object",
+   "description": "§3.4.5 the response of a `POST /airc/v0/workspace` op other than `join-code`.",
+   "properties": {
+    "t": {
+     "const": "workspace"
+    },
+    "ok": {
+     "type": "boolean"
+    },
+    "keys_revoked": {
+     "type": "integer"
+    },
+    "recovery": {
+     "type": "string",
+     "pattern": "^airc-recover:1;"
+    },
+    "deleted": {},
+    "endpoints": {},
+    "links_revoked": {},
+    "queued_dropped": {}
+   },
+   "required": [
+    "ok"
+   ],
+   "additionalProperties": true
+  },
+  "skill": {
+   "type": "object",
+   "description": "§21.1 a skill: the shape of an A2A Agent Card skill.",
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$"
+    },
+    "name": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64,
+     "pattern": "^[^\\n\\r]*$"
+    },
+    "description": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 200,
+     "pattern": "^[^\\n\\r]*$"
+    },
+    "tags": {
+     "type": "array",
+     "maxItems": 8,
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[^\\n\\r]*$"
+     }
+    },
+    "examples": {
+     "type": "array",
+     "maxItems": 4,
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\n\\r]*$"
+     }
+    }
+   },
+   "required": [
+    "id",
+    "name"
+   ],
+   "additionalProperties": false
+  },
+  "multikey": {
+   "type": "string",
+   "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$",
+   "description": "§24: multibase base58-btc Multikey (ed25519 z6Mk…, X25519 z6LS…)."
+  },
+  "verificationMethod": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^did:"
+    },
+    "type": {
+     "const": "Multikey"
+    },
+    "controller": {
+     "type": "string",
+     "pattern": "^did:"
+    },
+    "publicKeyMultibase": {
+     "$ref": "#/$defs/multikey"
+    },
+    "expires": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "type",
+    "controller",
+    "publicKeyMultibase"
+   ],
+   "additionalProperties": true
+  },
+  "didDocument": {
+   "type": "object",
+   "description": "§24 a realm's (24.1) or endpoint's (24.2) DID document: a mirror of the DNS record or the key record.",
+   "properties": {
+    "@context": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "contains": {
+      "const": "https://www.w3.org/ns/did/v1"
+     }
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^did:web:"
+    },
+    "alsoKnownAs": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "controller": {
+     "type": "string",
+     "pattern": "^did:web:"
+    },
+    "verificationMethod": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "$ref": "#/$defs/verificationMethod"
+     }
+    },
+    "assertionMethod": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "authentication": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "keyAgreement": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "service": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "type": {
+        "const": "AIRC"
+       },
+       "serviceEndpoint": {
+        "type": "string",
+        "pattern": "^airc://"
+       }
+      },
+      "required": [
+       "id",
+       "type",
+       "serviceEndpoint"
+      ]
+     }
+    }
+   },
+   "required": [
+    "@context",
+    "id",
+    "verificationMethod",
+    "assertionMethod",
+    "service"
+   ],
+   "additionalProperties": true
+  },
+  "receiptBody": {
+   "type": "object",
+   "description": "§6.7 the body of a receipt reply (type application/airc-receipt+json).",
+   "properties": {
+    "state": {
+     "type": "string",
+     "enum": [
+      "seen",
+      "done"
+     ]
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    }
+   },
+   "required": [
+    "state",
+    "ts"
+   ],
+   "additionalProperties": true
+  }
+ }
+}

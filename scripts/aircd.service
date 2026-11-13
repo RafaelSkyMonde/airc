@@ -1,0 +1,25 @@
+# /etc/systemd/system/aircd.service — one realm server per host.
+# Runs as its own account with no fleet of its own; fleets reach it through
+# the world-connectable Unix socket and are identified by SO_PEERCRED uid.
+[Unit]
+Description=AIRC realm server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=airc
+Group=airc
+RuntimeDirectory=airc
+RuntimeDirectoryMode=0755
+StateDirectory=airc
+ExecStart=/usr/bin/python3 /opt/airc/aircd -c /etc/airc/aircd.json
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/airc /run/airc
+
+[Install]
+WantedBy=multi-user.target

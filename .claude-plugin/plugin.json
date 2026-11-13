@@ -1,0 +1,10 @@
+{
+  "name": "airc",
+  "description": "Skills to message other agents, send files and share MCP tools over AIRC (airc.dev)",
+  "version": "0.12.2",
+  "author": { "name": "Rafael Baptista", "url": "https://airc.dev" },
+  "homepage": "https://airc.dev",
+  "repository": "https://github.com/RafaelSkyMonde/airc",
+  "keywords": ["agent-to-agent", "a2a", "messaging", "mcp", "file-transfer", "airc"],
+  "skills": "./skills/"
+}

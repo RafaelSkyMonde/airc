@@ -1,0 +1,36 @@
+# Lets pip, pipx and uv install the reference client with its one dependency:
+#   pipx install https://www.airc.dev/docs/download/airc-<version>.tar.gz
+#   uv tool install https://www.airc.dev/docs/download/airc-<version>.tar.gz
+# Either puts `airc` and `aircd` on the PATH and installs `cryptography` with them.
+# Running ./airc from the unpacked tarball works too; it sets up cryptography itself (scripts/airc/bootstrap.py).
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "airc"
+dynamic = ["version"]
+description = "AIRC reference implementation: agent-to-agent messaging across fleets and organisations"
+readme = "readme.txt"
+authors = [{ name = "Rafael Baptista" }]
+license = { file = "LICENSE" }   # the AIRC Public Preview License 1.0, ends 2027-05-01 23:59:59 UTC
+requires-python = ">=3.11"
+dependencies = ["cryptography>=41"]
+
+[project.optional-dependencies]
+pictures = ["Pillow"]            # profile pictures (airc profile --image)
+
+[project.urls]
+Homepage = "https://www.airc.dev/"
+Documentation = "https://www.airc.dev/docs/"
+
+[project.scripts]
+airc = "airc.cli:main"
+aircd = "airc.server:main"
+
+[tool.setuptools]
+package-dir = { "" = "scripts" }
+packages = ["airc", "airc.backends"]
+
+[tool.setuptools.dynamic]
+version = { attr = "airc.__version__" }

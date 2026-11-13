@@ -1,0 +1,138 @@
+{
+  "_comment": "Realm server for this host. uid_namespaces maps a Unix uid (a fleet owner) to the namespace(s) it may bind and send as.",
+  "realm": "example.com",
+  "client_unix": "/run/airc/airc.sock",
+  "client_unix_mode": "666",
+  "peer_listen": "0.0.0.0:2472",
+  "tls": {
+    "cert": "/etc/letsencrypt/live/airc.example.com/fullchain.pem",
+    "key": "/etc/letsencrypt/live/airc.example.com/privkey.pem"
+  },
+  "uid_namespaces": {
+    "1000": [
+      "alice"
+    ],
+    "1001": [
+      "carol"
+    ]
+  },
+  "peers": {},
+  "spool_dir": "/var/lib/airc/spool",
+  "policy": {
+    "_comment": "Ordered rules, first match wins; no match -> default_allow. Deny by default and let strangers in through links and passports (spec 10.1). The {\"links\": true} entry marks where links are evaluated: rules before it override links, rules after it are fallbacks (spec Appendix B).",
+    "default_allow": false,
+    "rules": [
+      {
+        "from": "*",
+        "to": "//example.com/_resolver",
+        "allow": true,
+        "note": "health check is public"
+      },
+      {
+        "from": "//example.com/alice/**",
+        "to": "//example.com/alice/**",
+        "allow": true,
+        "note": "alice's agents talk among themselves"
+      },
+      {
+        "from": "//example.com/carol/**",
+        "to": "//example.com/carol/**",
+        "allow": true,
+        "note": "carol's agents talk among themselves"
+      },
+      {
+        "links": true,
+        "note": "links and passports decide here"
+      },
+      {
+        "from": "*",
+        "to": "*",
+        "allow": false,
+        "note": "everything else needs a link or a passport"
+      }
+    ]
+  },
+  "links": {
+    "_comment": "opt_out: endpoints beneath a namespace or realm side of a link may refuse it for themselves, and an endpoint may refuse every link a given key authorized (link revoke --key, spec 12.7). must_accept: links an endpoint may not revoke, opt out of or refuse by key, by the other side's address pattern or by a key that signed the link's passport (spec 12.8). auto_accept: endpoint patterns whose offers are accepted at once, through a passport like any accept (spec 12.9).",
+    "opt_out": true,
+    "must_accept": []
+  },
+  "passports": {
+    "_comment": "Site policy for passports (spec 12.8). host: the HTTPS host in passport URLs (default airc.<realm>). who: who may ask for a passport of each scope kind: agents (any client that may act for the scope), owner (the client whose namespaces contain the scope), admin (admin_uids only) or off. keys: keys entitled to authorize passports for a scope and everything beneath it (an endpoint's own published identity key is always entitled for itself and its sub-agents; key-add adds more, stored in passports.json). require: keys every passport whose scope matches the pattern must carry; when the key is site_key's, the server adds its signature itself. site_key: a file holding a 32-byte ed25519 seed (raw or base64), or the base64 seed; absent or \"realm\": the realm's own signing key; \"none\": no site key (then a client must sign every passport, including the one its server issues when it accepts a link offer, spec 12.9); entitled for the whole realm, and signs alone when a client sends no signature. present_from: which redeemers (realm names, address patterns, or *) may present passports of each kind; accept_from: from which issuing realms this server accepts grants of each kind. accept_require: keys a grant must carry for a matching local endpoint or namespace to accept it. redeem_as_namespace: whether local clients may redeem as one of their namespaces. delegate_who (agents|owner|admin|off, default owner) and delegate_to (realm patterns, default *): who may ask for a delegation and to which realms (spec 12.10). follow_forwards: root realms (patterns, default *) to which this server follows a knock forwarded with a delegated passport.",
+    "host": "airc.example.com",
+    "who": {
+      "endpoint": "agents",
+      "namespace": "owner",
+      "realm": "admin"
+    },
+    "keys": [
+      {
+        "scope": "//example.com/alice/",
+        "key": "<base64 ed25519 public key>"
+      }
+    ],
+    "require": [
+      {
+        "scope": "*",
+        "key": "<base64 public key of site_key>",
+        "role": "site key"
+      }
+    ],
+    "site_key": "/var/lib/airc/passport-site.key",
+    "present_from": {
+      "endpoint": [
+        "*"
+      ],
+      "namespace": [
+        "*"
+      ],
+      "realm": []
+    },
+    "accept_from": {
+      "endpoint": [
+        "*"
+      ],
+      "namespace": [
+        "*"
+      ],
+      "realm": [
+        "*"
+      ]
+    },
+    "accept_require": [],
+    "redeem_as_namespace": true,
+    "default_uses": 1,
+    "max_uses": 100,
+    "max_ttl": 7776000,
+    "link_ttl": 2592000,
+    "max_keys": 4,
+    "redeem_failures_per_hour": 20,
+    "delegate_who": "owner",
+    "delegate_to": [
+      "*"
+    ],
+    "follow_forwards": [
+      "*"
+    ]
+  },
+  "receipts": {
+    "_comment": "Receipts (spec 6.7): whether this site's endpoints send seen/done receipts to senders that asked. default: senders in this realm; foreign: senders in other realms (off by default, a receipt shows when an agent's owner is active); scopes: per recipient endpoint or namespace (trailing /), the narrowest match winning. Values on | off | hook; hook POSTs {id, from, to, state, sender_realm, type} to the URL (3 s) and sends only on {\"allow\": true}.",
+    "default": "on",
+    "foreign": "off",
+    "scopes": {
+      "alice/": "on",
+      "alice/ops": "hook"
+    },
+    "hook": "http://127.0.0.1:8471/receipts"
+  },
+  "http": {
+    "_comment": "trusted_proxies: addresses or CIDR ranges of reverse proxies (nginx). When the direct peer is one, the client address (for the challenge send hook, spec 11.6) is the rightmost X-Forwarded-For entry that is not itself a trusted proxy. Default loopback.",
+    "trusted_proxies": [
+      "127.0.0.1",
+      "::1"
+    ]
+  },
+  "_comment_ttl": "max_ttl: the longest message ttl accepted (seconds, default 7 days; longer is failed refused 'ttl too long'). clock_skew: added to it for how long message ids are remembered against replays (default 1 day, so 8 days). Spec 9.3, 7.3.",
+  "max_ttl": 604800,
+  "clock_skew": 86400
+}

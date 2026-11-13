@@ -1,0 +1,89 @@
+# AIRC Public Preview License
+
+**Version 1.0 — October 21, 2026**
+
+**The preview ends at 23:59:59 UTC on May 1, 2027.**
+
+AIRC is experimental and under active development. The purpose of this license is to give everyone broad rights to implement, test and build on the protocol while it is being developed and refined, so that the design can be proven in use before its terms are settled. It lets anyone try AIRC, implement it, and use it commercially or privately during the preview, subject to the terms below. There is no charge for these permissions. The preview is a development period, not an indication of the terms that will follow it; continuing afterward will require whatever license the Licensor then offers.
+
+## 1. What this license covers
+
+Rafael Baptista (the **Licensor**) grants this license. **You** means the person or organization exercising its permissions. If You act for an organization, You confirm that You have authority to accept these terms for it.
+
+The **Materials** are the AIRC Protocol Specification and AIRC Addressing Scheme (together, the **Specification**), documentation, examples, test vectors, conformance and interoperability tests, and reference software that the Licensor expressly publishes under this license. It covers only the versions identified as carrying this license: a version carries it when its specification header, its documentation page, or the LICENSE file distributed with the software says so.
+
+By exercising permissions granted here, You accept their conditions. Rights You have independently of this license are unaffected.
+
+## 2. What You may do during the preview
+
+Subject to this license, the Licensor grants You a worldwide, non-exclusive, royalty-free copyright license to use, copy, modify, translate, publish, display, and distribute the Materials, including software in source or binary form.
+
+You may write Your own implementation, modify the reference software, experiment with extensions, and operate AIRC for any purpose, internally or for others, at any scale. Certification and perfect conformance are not conditions of this preview license. Patent permission is set out in section 3.
+
+You may charge for services, support, and software licenses supplied during the preview, provided that any license You grant for software that depends on this license does not run past the preview's end.
+
+Recipients receive permissions under this license directly from the Licensor. You cannot grant a patent license on the Licensor's behalf or promise recipients longer or broader rights under the Licensor's copyrights or patents. You may license Your own contributions separately.
+
+## 3. Patent permission
+
+**Covered Patents** means patent claims, in any country, that the Licensor owns or controls now or later and has authority to license, and that would necessarily be infringed by implementing a required or optional feature specified in a covered version of the Specification, or by using the reference software as published. This includes claims in patents granted after the preview ends.
+
+Subject to this license, the Licensor grants You a worldwide, non-exclusive, royalty-free license under Covered Patents, during the preview, to make, have made, use, import, and supply implementations as permitted in section 2. This covers independently written, partial, and modified implementations to the extent they practice those specified features or covered reference-software inventions. It does not cover unrelated inventions or features.
+
+Patent permission ends when this license expires or terminates. It does not cover continued operation afterward, even of an implementation created, installed, or first used during the preview.
+
+The Licensor will not seek payment or assert Covered Patents for acts that occurred while this license was in effect and were authorized by it. This promise continues after the license ends and applies even if the relevant patent is granted later. It protects only those past acts and gives no permission for later activity.
+
+## 4. Notices and endpoint credit
+
+When You distribute Materials, retain the Licensor's copyright and patent notices, include this license, and clearly state its expiration date. Mark changes to the Specification and reference software so readers can distinguish them from the Licensor's releases. Do not remove these notices from copies You distribute or conceal the expiration date from recipients.
+
+When You supply an independently written implementation relying on this license, also provide recipients with this license and clearly state its expiration date.
+
+Each web page You operate whose main purpose is to identify an AIRC endpoint, workspace, or realm and explain how to reach it must display:
+
+> Uses the AIRC protocol, developed by Rafael Baptista. Learn more at airc.dev.
+
+Link “AIRC protocol” or “airc.dev” to https://www.airc.dev/. A reasonably legible credit in the ordinary page content or footer is sufficient. Credit hidden only in source code, metadata, a separate legal page, or a closed menu is not sufficient. Markdown and plain-text versions of the page must include equivalent credit and the URL.
+
+You may style or translate the credit without changing its meaning, and may use standard link qualifications such as `rel="nofollow"`. This attribution requirement does not itself require creating a web page or adding credit to individual protocol messages.
+
+## 5. Names and ownership
+
+The Licensor permits the attribution above and truthful statements about which AIRC versions and features You implement. No other trademark permission is granted. Do not suggest endorsement, certification, or operation by the Licensor, or present an altered specification as an official AIRC specification.
+
+This license transfers no ownership. You keep the rights You have in Your own code, data, messages, and results, subject to existing rights in any Materials You include.
+
+## 6. When the preview ends
+
+Permissions begin when the relevant Materials are released under this license and end at the fixed date above, unless ended earlier under section 7. Downloading, copying, modifying, or redistributing does not restart the clock. Earlier versions and existing installations have the same deadline.
+
+Afterward, You must stop activities that depend on the expired permissions unless You obtain another license. This applies to internal and external operation alike, at any scale. Nothing here requires permission for activities that applicable law allows without it.
+
+You may keep archival copies of the Materials, leave previously published reviews, tutorials, and test results available, and continue to read, quote, and discuss the Specification and documentation with attribution. These limited copyright permissions survive; they do not authorize continued software operation or practice of Covered Patents. Your own code, data, messages, and results do not have to be deleted.
+
+The Licensor may extend the preview in writing or offer other licenses, including paid licenses or terms requiring certification. No extension, later license, or particular price is promised. Later terms cannot shorten this preview for versions already released under it or withdraw permission for properly authorized past acts. Any transfer of the Licensor's covered rights must preserve permissions already granted here.
+
+## 7. If You break these terms
+
+The notice, attribution, distribution, and naming requirements are conditions of the copyright and patent permissions granted here.
+
+For an accidental notice or attribution failure, permissions continue for 30 days after You discover it or receive written notice, whichever comes first. Correct it within that period and permissions continue uninterrupted; otherwise they end at the end of that period. Any other material breach ends the permissions when it occurs. Ended permissions can be restored by the Licensor in writing. No correction period extends the preview's expiration date.
+
+If You initiate or authorize a patent infringement claim alleging that implementing the Specification or using the unmodified reference software infringes a patent, Your patent permission ends when the claim is filed. A defense or counterclaim against a party that first sued You for patent infringement does not trigger this rule. Termination does not undo permission for earlier, properly authorized acts.
+
+## 8. No warranty; limited liability
+
+**The Materials and permissions are provided “as is,” without warranties of any kind, express or implied, including merchantability, fitness for a particular purpose, title, or non-infringement.** The Licensor does not promise that the Materials are secure, reliable, compatible, supported, or free of third-party rights.
+
+**To the fullest extent allowed by law, the Licensor is not liable for any loss or damages arising from the Materials or this license**, whether under contract, tort, or another legal theory, even if advised that such loss or damage is possible. These limits do not exclude liability that the law does not allow to be excluded.
+
+## 9. General
+
+This text is the complete agreement for the permissions it grants. It does not override separate licenses or agreements, and third-party materials remain under their own licenses. Access to hosted services may have separate terms and charges.
+
+New Hampshire law and applicable United States federal law govern this license, without regard to conflict-of-laws rules. Disputes under it must be brought in the state or federal courts in New Hampshire, and both parties consent to those courts' jurisdiction. Either party may seek urgent protection of intellectual property in another court with authority to grant it.
+
+If a provision cannot be enforced, the rest remains effective. Provisions about past acts, surviving permissions, ownership, notices on retained Materials, warranties, liability, and disputes continue after expiration or termination. No rights beyond those expressly granted are waived, and this license creates no intellectual property rights that the Licensor does not otherwise have.
+
+Questions and requests for another license: [legal@airc.dev](mailto:legal@airc.dev).

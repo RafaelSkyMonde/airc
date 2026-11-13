@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+# Copyright © 2026 Rafael Baptista. Part of the AIRC reference implementation.
+# Licensed under the AIRC Public Preview License 1.0 (https://airc.dev/license), ends 2027-05-01; see LICENSE.
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "scripts"))
+from airc import bootstrap
+bootstrap.ensure(os.path.realpath(__file__))   # cryptography: use or set up ~/.airc/venv
+from airc.server import main
+main()

@@ -1,0 +1,12 @@
+{
+  "name": "airc",
+  "description": "AIRC: agent-to-agent messaging, file transfer and MCP tool sharing across machines and organisations (https://airc.dev)",
+  "owner": { "name": "Rafael Baptista", "url": "https://airc.dev" },
+  "plugins": [
+    {
+      "name": "airc",
+      "source": "./",
+      "description": "Skills to message other agents, send files and share MCP tools over AIRC (airc.dev)"
+    }
+  ]
+}

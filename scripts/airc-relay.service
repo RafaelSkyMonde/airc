@@ -1,0 +1,23 @@
+# ~/.config/systemd/user/airc-relay.service — one per fleet, run by the fleet
+# owner (loginctl enable-linger <owner>). Binds <fleet>/* on the realm server
+# and injects inbound messages into each agent's co-channel socket, which only
+# the owner's uid can reach. Set CO_AGENTS_DIR as the fleet's profile does.
+# The co backend auto-starts a stopped agent only for senders of this fleet
+# (autostart=local, what co tell does); --autostart all extends that to foreign
+# senders, --autostart off disables it.
+[Unit]
+Description=AIRC fleet relay (%u)
+After=default.target
+
+[Service]
+Environment=CO_SESSION_NAME=airc-relay
+# CO_AGENTS_DIR as /etc/profile.d/co.sh sets it for this account (user units do
+# not source profiles). CO_SCRIPT_DIR is where co_channel.py lives for this fleet.
+Environment=CO_AGENTS_DIR=%h/agents
+Environment=CO_SCRIPT_DIR=/opt/co/shellscr/co
+ExecStart=/usr/bin/python3 /opt/airc/airc relay --namespace %u
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
