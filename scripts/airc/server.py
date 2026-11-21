@@ -1018,7 +1018,7 @@ class Server:
             self.spool.mark_seen(mid)
             self.policy.note_delivery(frm, route_to)
             if by_link:
-                self.links.note_use(by_link.group(1), str(frm), str(to))
+                self.links.note_use(by_link.group(1), str(frm), str(to), sent=self._link_sent(by_link.group(1), frm, to))
             if receipt:                                     # §6.7: relays record seen/done in the audit stream
                 self.events.emit("msg.receipt", id=mid, re=msg.get("re"), state=receipt, **{"from": str(frm)}, to=str(to),
                                  status=a["status"], hop="client" if origin.kind == "client" else "peer")
@@ -1840,6 +1840,15 @@ class Server:
             ack = await self._send_control(me, other, op, rec, origin=link, e2e_ik=ik, sig=sig, ts=ts)
             return {"t": "linked", "ok": True, "link": rec, **_delivery(ack), "reason": ack.get("reason", "")}
         return err(f"unknown op {op!r}", "bad_frame")
+
+    def _link_sent(self, link_id: str, frm, to) -> bool:
+        """For the status page: did this message leave from our side of the link (sent) or arrive into it?
+        Across realms that is which realm it came from. Within this realm both ends are ours, so "sent" means from
+        the link's first-listed end (a, shown on the left of the status page's "between" column)."""
+        if (frm.realm == self.realm) != (to.realm == self.realm):
+            return frm.realm == self.realm
+        a = (self.links.links.get(link_id) or {}).get("a")
+        return side_matches(a, str(frm)) if a else True
 
     async def admin_action(self, action: str, ident: str) -> tuple[bool, str]:
         """An operator's action from the status page (/admin): revoke an active link, withdraw an offer we made,

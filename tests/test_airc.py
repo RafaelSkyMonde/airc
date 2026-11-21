@@ -404,6 +404,42 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ack["status"], "failed"); self.assertIn("expired", ack["reason"])
 
 
+class ServeFallbackTests(unittest.IsolatedAsyncioTestCase):
+    """serve() falls back to polling when the WebSocket keeps failing, and tries the socket again later instead
+    of polling for good (an outside relay polled every 5.5 s for a day after a home network outage)."""
+
+    async def test_polling_retries_the_websocket(self):
+        from airc.httpclient import HttpRelaySession
+
+        class FakeHc:
+            features = {"ws"}
+            displaced = set()
+            def __init__(self): self.polls = 0
+            async def inbox(self, mx=50):
+                self.polls += 1
+                return []
+
+        class Session(HttpRelaySession):
+            WS_RETRY = 0.05
+            def __init__(self, hc):
+                super().__init__(hc)
+                self.attempts = 0
+            async def _serve_ws(self, handler, say):
+                self.attempts += 1
+                if self.attempts <= 3:                   # an outage: the first opens fail, so serve() polls
+                    raise OSError("network unreachable")
+                raise asyncio.CancelledError()           # the socket opened again: stop the test here
+
+        hc = FakeHc()
+        s = Session(hc)
+        modes = []
+        with self.assertRaises(asyncio.CancelledError):
+            await asyncio.wait_for(s.serve(lambda m: None, poll=0.01, on_mode=modes.append), 5)
+        self.assertGreaterEqual(hc.polls, 1, "it polled while the socket was down")
+        self.assertEqual(s.attempts, 4, "it kept trying the WebSocket every WS_RETRY until it opened")
+        self.assertEqual(sum("trying the WebSocket again" in m for m in modes), 3, modes)
+
+
 class AliasTests(unittest.IsolatedAsyncioTestCase):
     """Local aliases: a fleet's short names for prefixes in other realms. Typed and shown short, sent in full."""
 
@@ -3029,11 +3065,26 @@ class AdminPageTests(unittest.IsolatedAsyncioTestCase):
         m = await asyncio.wait_for(y.messages().__anext__(), 5); await y.ack(m["id"])
         loop = asyncio.get_running_loop()
         st, h, body = await loop.run_in_executor(None, lambda: self._get("http://127.0.0.1:24862/admin.json"))
+        l = next(l for l in json.loads(body)["links"]["active"] if l["id"] == lid)
+        # both ends are in this realm: "sent" is from the first-listed end (a), which after the accept is carol/y
+        self.assertEqual(l["a"], "airc://home.test/carol/y")
+        self.assertEqual(l["received"]["from"], "airc://home.test/alice/x"); self.assertIsNone(l["sent"])
+        t = asyncio.ensure_future(y.send("alice/x", "and back", frm="carol/y"))      # the other way: sent
+        m = await asyncio.wait_for(x.messages().__anext__(), 5); await x.ack(m["id"]); await t
+        st, h, body = await loop.run_in_executor(None, lambda: self._get("http://127.0.0.1:24862/admin.json"))
+        l = next(l for l in json.loads(body)["links"]["active"] if l["id"] == lid)
+        self.assertEqual((l["sent"]["from"], l["sent"]["count"]), ("airc://home.test/carol/y", 1))
+        self.assertEqual(l["received"]["count"], 1)
+        # usage kept before directions were recorded is placed by the realm it came from
+        from airc.adminpage import _dir
+        old = {"last": 1.0, "from": "airc://partner.test/z", "to": "airc://home.test/alice/x", "count": 3}
+        self.assertEqual((_dir(old, "sent", "home.test"), _dir(old, "received", "home.test")["from"]), (None, "airc://partner.test/z"))
+        st, h, body = await loop.run_in_executor(None, lambda: self._get("http://127.0.0.1:24862/admin.json"))
         self.assertEqual(st, 200); v = json.loads(body)
         act = [l for l in v["links"]["active"] if l["id"] == lid]
         self.assertEqual(len(act), 1); l = act[0]
-        self.assertEqual(l["uses"], 1); self.assertEqual(l["last_from"], "airc://home.test/alice/x")
-        self.assertEqual(l["last_to"], "airc://home.test/carol/y"); self.assertEqual(l["label"], "status page test")
+        self.assertEqual(l["uses"], 2); self.assertEqual(l["last_from"], "airc://home.test/carol/y")
+        self.assertEqual(l["last_to"], "airc://home.test/alice/x"); self.assertEqual(l["label"], "status page test")
         self.assertFalse(v["policy"]["default_allow"]); self.assertTrue(v["policy"]["has_links_marker"])
         self.assertEqual([r.get("note") for r in v["policy"]["rules"]], ["health", "", "deny the rest"])
         st, h, body = await loop.run_in_executor(None, lambda: self._get("http://127.0.0.1:24862/admin"))
@@ -3041,9 +3092,12 @@ class AdminPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("text/html", h.get("Content-Type", "")); self.assertIn("noindex", h.get("X-Robots-Tag", ""))
         self.assertIn(lid, page); self.assertIn("status page test", page); self.assertIn("deny the rest", page)
         self.assertIn("links and passports are evaluated here", page); self.assertNotIn("over the link", page)
+        from airc.profile import FAVICON_HREF
+        self.assertIn(f'href="{FAVICON_HREF}"', page)                      # the same icon as the address pages, intact
+        self.assertIn("<th>last sent</th><th>last received</th>", page); self.assertNotIn("last message</th><th>uses", page)
         # the usage record survives a restart
         from airc.links import LinkStore
-        self.assertEqual(LinkStore(self.r.a.links.path).usage.get(lid, {}).get("count"), 1)
+        self.assertGreaterEqual(LinkStore(self.r.a.links.path).usage.get(lid, {}).get("count"), 1)   # written at most every 5 s
 
     @staticmethod
     def _post(url, data, **hdrs):

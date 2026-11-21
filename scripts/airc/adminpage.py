@@ -13,6 +13,7 @@ import html as _h
 import time
 
 from . import __version__
+from . import address as A
 from .profile import FAVICON_HREF
 
 CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'"
@@ -30,11 +31,27 @@ th{color:var(--mute);font-weight:600;white-space:nowrap}
 code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--chip);padding:1px 4px;border-radius:4px}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.mute{color:var(--mute)}
 .nowrap{white-space:nowrap}
+.label{min-width:22em}
 form{display:inline;margin:0}
 button{font:12px system-ui,sans-serif;color:var(--bad);background:transparent;border:1px solid var(--line);border-radius:4px;padding:2px 7px;cursor:pointer}
 button:hover{border-color:var(--bad)}
 .notice{margin:12px 0;padding:8px 12px;border-radius:6px;background:var(--chip)}
 """
+
+
+def _dir(u: dict, which: str, realm) -> dict | None:
+    """The last message one way over a link: {last, from, to, count}. Usage recorded before directions were
+    kept (aircd 0.12.2 and older) has only the overall last message, placed here by the realm it came from."""
+    d = u.get(which)
+    if isinstance(d, dict):
+        return d
+    if "sent" in u or "received" in u or not u.get("from"):
+        return None
+    try:
+        from_here = A.parse(u["from"]).realm == realm
+    except (A.AddressError, KeyError):
+        return None
+    return {"last": u.get("last"), "from": u.get("from"), "to": u.get("to")} if from_here == (which == "sent") else None
 
 
 def _ago(ts, now) -> str:
@@ -81,6 +98,7 @@ def view(srv, now: float | None = None) -> dict:
             "label": l.get("label") or "", "created": l.get("created"), "expires": l.get("expires"),
             "offered_by": l.get("offered_by"), "pins": list(((l.get("origin") or {}).get("pins") or [])),
             "last_used": u.get("last"), "last_from": u.get("from"), "last_to": u.get("to"), "uses": int(u.get("count") or 0),
+            "sent": _dir(u, "sent", srv.realm), "received": _dir(u, "received", srv.realm),
         }
 
     active = [row(l) for l in recs if l.get("state") == "active" and links._live(l, now)]
@@ -150,7 +168,7 @@ def html_page(v: dict, token: str = "", notice=("", "")) -> str:
 
     out = [f"<!doctype html><html lang=en><head><meta charset=utf-8><title>{e(v['realm'])} · AIRC status</title>",
            "<meta name=robots content='noindex,nofollow'><meta name=viewport content='width=device-width,initial-scale=1'>",
-           f"<link rel=icon type=image/svg+xml href='{FAVICON_HREF}'>",
+           f'<link rel=icon type=image/svg+xml href="{FAVICON_HREF}">',      # double quotes: the SVG data uses single ones
            f"<style>{_CSS}</style></head><body><main>",
            f"<h1>{e(v['realm'])} <span class=mute>· links and policy</span></h1>",
            f"<div class=sub>{e(v['server'])} · {_iso(now)} · internal page, metadata only · <a href='/admin.json'>json</a></div>"]
@@ -164,15 +182,18 @@ def html_page(v: dict, token: str = "", notice=("", "")) -> str:
     L = v["links"]
     out.append(f"<h2>Active links <span class=mute>({len(L['active'])})</span></h2>")
     if L["active"]:
-        out.append("<table><tr><th>link</th><th>between</th><th>label</th><th>last used</th><th>last message</th><th>uses</th><th>created</th><th>expires</th><th></th></tr>")
+        out.append("<table><tr><th>link</th><th>between</th><th class=label>label</th><th>last sent</th><th>last received</th><th>uses</th><th>created</th><th>expires</th><th></th></tr>")
         for r in L["active"]:
-            last = f"<span class=ok>{e(_ago(r['last_used'], now))}</span>" if r["last_used"] else "<span class=mute>never</span>"
-            lm = f"{e(short(r['last_from']))} → {e(short(r['last_to']))}" if r["last_from"] else "<span class=mute>—</span>"
+            def when(d):                                    # the time, with the exact from -> to on hover
+                if not d:
+                    return "<td class=nowrap><span class=mute>never</span></td>"
+                tip = f"{_iso(d.get('last'))}: {short(d.get('from'))} → {short(d.get('to'))}"
+                return f"<td class=nowrap title='{e(tip)}'><span class=ok>{e(_ago(d.get('last'), now))}</span></td>"
             exp = r["expires"]
             expc = "bad" if exp and float(exp) - now < 86400 else ("warn" if exp and float(exp) - now < 7 * 86400 else "")
             out.append(f"<tr><td class=nowrap><code>{e(r['id'])}</code></td>"
                        f"<td><code>{e(short(r['a']))}</code> {arrow(r['direction'])} <code>{e(short(r['b']))}</code></td>"
-                       f"<td>{e(r['label'])}</td><td class=nowrap title='{e(_iso(r['last_used']))}'>{last}</td><td>{lm}</td>"
+                       f"<td class=label>{e(r['label'])}</td>{when(r['sent'])}{when(r['received'])}"
                        f"<td>{r['uses']}</td><td class=nowrap title='{e(_iso(r['created']))}'>{e(_ago(r['created'], now))}</td>"
                        f"<td class='nowrap {expc}' title='{e(_iso(exp))}'>{e(_in(exp, now)) if exp else 'never'}</td>"
                        f"<td>{button('revoke-link', r['id'], 'revoke')}</td></tr>")

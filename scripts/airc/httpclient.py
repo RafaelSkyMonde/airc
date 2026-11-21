@@ -620,33 +620,42 @@ class HttpRelaySession:
             self._ws = None
             await ws.close()
 
+    WS_RETRY = 300.0       # while polling after the WebSocket failed, try it again this often (seconds)
+
     async def serve(self, handler, poll: float = 5.0, on_mode=None):
         """Take messages and ack each. A realm that offers the WebSocket (feature "ws", §3.4.6) gets one socket
         that carries everything and keeps the lease, reopened when it closes. Without it (the realm does not
-        list ws, or the socket cannot be opened three times running), poll the inbox every poll seconds.
+        list ws, or the socket cannot be opened three times running), poll the inbox every poll seconds; when
+        the realm does offer it, try the socket again every WS_RETRY seconds and go back to push once it opens,
+        so a network outage does not leave a client polling for good.
         on_mode(text) is told which mode is in effect, and why it changed."""
         say = on_mode or (lambda text: None)
-        why = "this realm offers no WebSocket"
-        if "ws" in self.hc.features:
-            fails, ever = 0, False
-            while True:
-                try:
-                    await self._serve_ws(handler, say)
-                    ever, fails = True, 0
-                    say("push: the WebSocket closed; reopening")
-                except Displaced:
-                    raise
-                except (HttpClientError, OSError, EOFError) as e:
-                    fails += 1
-                    if fails >= 3 or not ever:
-                        why = f"no WebSocket ({str(e)[:80]})"
-                        break
-                    say(f"push: the WebSocket failed ({str(e)[:80]}); reopening")
-                await asyncio.sleep(2 * max(1, fails))
-        say(f"polling every {poll:g} s: {why}")
+        loop = asyncio.get_running_loop()
         while True:
-            await self._drain(handler)
-            await asyncio.sleep(poll)
+            why = "this realm offers no WebSocket"
+            if "ws" in self.hc.features:
+                fails, ever = 0, False
+                while True:
+                    try:
+                        await self._serve_ws(handler, say)
+                        ever, fails = True, 0
+                        say("push: the WebSocket closed; reopening")
+                    except Displaced:
+                        raise
+                    except (HttpClientError, OSError, EOFError) as e:
+                        fails += 1
+                        if fails >= 3 or not ever:
+                            why = f"no WebSocket ({str(e)[:80]})"
+                            break
+                        say(f"push: the WebSocket failed ({str(e)[:80]}); reopening")
+                    await asyncio.sleep(2 * max(1, fails))
+                say(f"polling every {poll:g} s: {why}; trying the WebSocket again in {self.WS_RETRY:g} s")
+            else:
+                say(f"polling every {poll:g} s: {why}")
+            until = loop.time() + self.WS_RETRY
+            while "ws" not in self.hc.features or loop.time() < until:
+                await self._drain(handler)
+                await asyncio.sleep(poll)
 
     async def _handle(self, handler, m):
         if m.get("id") in self._recent:

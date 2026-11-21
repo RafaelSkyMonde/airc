@@ -138,11 +138,14 @@ class LinkStore:
         except (OSError, ValueError):
             self.usage = {}
 
-    def note_use(self, link_id: str, frm: str, to: str, *, now: float | None = None) -> None:
-        """A message passed because of this link: remember when, and between which endpoints."""
+    def note_use(self, link_id: str, frm: str, to: str, *, sent: bool = True, now: float | None = None) -> None:
+        """A message passed because of this link: remember when, and between which endpoints, overall and per
+        direction (sent: it left from this realm's side of the link; otherwise it was received into it)."""
         now = time.time() if now is None else now
         u = self.usage.setdefault(link_id, {"count": 0})
         u["last"], u["from"], u["to"], u["count"] = now, frm, to, int(u.get("count", 0)) + 1
+        d = u.setdefault("sent" if sent else "received", {"count": 0})
+        d["last"], d["from"], d["to"], d["count"] = now, frm, to, int(d.get("count", 0)) + 1
         if now - self._usage_saved >= 5:
             self._usage_saved = now
             try:

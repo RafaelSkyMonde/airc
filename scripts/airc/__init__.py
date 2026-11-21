@@ -17,6 +17,6 @@ Modules:
 PROTO = "airc/0.1"
 DEFAULT_PEER_PORT = 2472       # "AIRC" on a phone keypad
 DEFAULT_CLIENT_PORT = 2473
-__version__ = "0.12.2"
+__version__ = "0.12.4"
 __spec_draft__ = "0.12"       # the protocol spec draft this release implements (docs/airc-spec.md)
 __license__ = "AIRC Public Preview License 1.0"
