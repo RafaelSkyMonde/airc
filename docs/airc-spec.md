@@ -2,7 +2,7 @@
 
 Copyright © 2026 Rafael Baptista. All rights reserved. The AIRC specification, documentation, test vectors and reference implementation are published for evaluation and discussion. Licensed under the AIRC Public Preview License 1.0 (<https://airc.dev/license>), a free license for implementation and use that ends on May 1, 2027. Patent pending.
 
-**Draft 0.12 — 2026-10-26.** Wire protocol version `airc/0.1`.
+**Draft 0.13 — 2026-11-21.** Wire protocol version `airc/0.1`.
 
 AIRC is a routed text-message protocol for software agents. This document is complete: an implementer who has only this text can
 build a conforming client, fleet relay, or federated server, and interoperate
@@ -418,7 +418,7 @@ WebSocket (§3.4.6) for as long as it stays open.
 |---|---|---|
 | `POST /airc/v0/send` | one `msg` frame; local-form addresses allowed | one `ack` |
 | `POST /airc/v0/bind` | `{"names":[…],"mode":"push"\|"webhook"\|"pull","webhook":"https://…","take_over":false}`; `"names":[]` releases (§4.3.1) | `bound` plus `{"mode":…}`, or 409 `name_held`; `bound` names are absolute patterns in network form (`//R/…`) or URI form |
-| `GET /airc/v0/inbox?max=50` | — | `{"t":"inbox","msgs":[msg…]}` (`max` at most 200): queued messages that this session's live binds win (§4.3), oldest first, not removed until acked; each is the `msg` frame exactly as received, so its signature still verifies |
+| `GET /airc/v0/inbox?max=50[&wait=N]` | — | `{"t":"inbox","msgs":[msg…]}` (`max` at most 200): queued messages that this session's live binds win (§4.3), oldest first, not removed until acked; each is the `msg` frame exactly as received, so its signature still verifies. `wait` asks for a long-poll where `features` lists `longpoll`, and the frame then states the hold that applied, `"wait":<s>` (§3.4.7); 429 `rate_limited` with `Retry-After` when a key pulls empty too often (§3.4.7) |
 | `POST /airc/v0/ack` | a list of `ack` frames | `{"t":"acked","n":…}` |
 | `GET /airc/v0/ws` | — | the WebSocket (§3.4.6): pushes, the backlog, send, ack and ping over one connection; offered when `features` lists `ws` |
 | `POST /airc/v0/link` | one `link` frame | `linked` |
@@ -444,7 +444,8 @@ An inbox response:
   later `delivered`.
 - `webhook`: the server `POST`s each `msg` to the client's URL (signed as a
   peer message would be, with the realm key) and relays the ack it gets.
-- `pull`: the client polls `/inbox`; the sender gets `queued endpoint_offline`.
+- `pull`: the client pulls `/inbox`, with a long-poll where the realm offers
+  one (§3.4.7); the sender gets `queued endpoint_offline`.
 
 The mode belongs to the session that bound. A message whose winning bind
 belongs to no live session is queued and its sender gets `queued
@@ -665,6 +666,50 @@ it keeps the names. `bind` with `"names":[]` still releases at once.
 ack before answering the sender `delivered` (§6.6); one that
 pushes through a fan-out service answers `queued` with code `pushed`.
 
+#### 3.4.7 Pulling: long-polls and limits
+
+A client that cannot hold the WebSocket pulls `GET /airc/v0/inbox`. Clients
+SHOULD prefer the WebSocket where `features` lists `ws`: it costs the realm
+about one request every few minutes while idle.
+
+**Long-polls.** A realm that lists `longpoll` in its `features` accepts
+`GET /airc/v0/inbox?wait=N`. When nothing is queued for the session, the
+server holds the request until a message arrives for it or the wait ends,
+then answers as for any inbox request: with the message, or with no messages.
+
+- The server decides how long it holds. It holds for `N` seconds or for its
+  own maximum, whichever is shorter (a server setting; 25 s is the
+  suggested default). `wait` with no value asks for the maximum. A client
+  asks for less, never more, when something between it and the server cuts
+  idle requests sooner (a proxy that times out after 20 s, say).
+- The response states the hold that applied: `"wait":<seconds>` in the
+  `inbox` frame, the longest the server would hold this request (`N` cut to
+  its maximum), or 0 when it did not hold it (messages were waiting, or no
+  `wait` was asked).
+- With messages already queued, the server answers at once.
+- A server that does not list `longpoll` ignores `wait` and answers at once;
+  a client that sends `wait` to it simply gets a short pull.
+- `wait` is not signed (the signed path leaves out the query, §3.4.2); it
+  changes only when the answer comes, never what it holds.
+- The message that ends a hold stays queued until acked, like any other, and
+  may come again on the next pull. A message that arrives while no request
+  is held waits for the next pull.
+
+A client long-polls in a loop: pull with `wait`, handle and ack what came,
+pull again at once. While idle that is one request per hold, about 150 an
+hour at 25 s, and a message arrives within moments of reaching the realm.
+
+**Limits.** A server MAY limit how often one key pulls without getting
+anything. Past its limit it answers `429` with code `rate_limited`, a
+`Retry-After` header and `"retry_after":<seconds>` in the error frame, and
+the key waits that long before pulling again. A pull that returns messages
+SHOULD NOT count toward the limit, so draining a busy queue is never
+refused; a long-poll that ends empty counts once. Clients MUST honour
+`Retry-After` (an error the client cannot otherwise act on, it is no
+reason to retry sooner). The reference realm allows 6 empty pulls a minute
+per key, one every 10 s on average, so a client that pulls without
+long-polling checks no more often than that.
+
 ## 4. Frame catalogue
 
 Fields marked **R** are required. Types: `str`, `int`, `num` (JSON number),
@@ -706,7 +751,7 @@ for an unknown field unless the entry says the frame is exactly as given.
 | `ns` | list of str | client face: R | namespaces this connection may act for (§5). Empty means anonymous: it may neither send nor bind. |
 | `sig` | str | peer face | signature over the welcome (§9.4), present when the server has a key and the hello carried a nonce |
 | `kid` | str | peer face | key id of `sig` |
-| `features` | list of str | client face | optional features the server offers: `keys` (§19.3), `profile` (§21), `leases` (§4.3.1), `ws` (§3.4.6), `bin` (§22). A client MUST NOT send frames for a feature not listed; unknown frames close the connection. |
+| `features` | list of str | client face | optional features the server offers: `keys` (§19.3), `profile` (§21), `leases` (§4.3.1), `ws` (§3.4.6), `longpoll` (§3.4.7), `bin` (§22). A client MUST NOT send frames for a feature not listed; unknown frames close the connection. |
 
 A dialling server MUST check `welcome.realm` equals the realm it resolved
 and drop the link otherwise.
@@ -3518,6 +3563,8 @@ A notifies alice/x: "[airc: support/desk redeemed your passport P9e8d7c6b (vendo
 ```
 
 ---
+
+*Changes since draft 0.12 (2026-11-21): long-polls on `/inbox` with `wait`, offered under feature `longpoll`, the hold set by the server and stated in the response; a server may limit empty pulls per key with 429 `rate_limited` and `Retry-After`, which clients must honour (§3.4.7).*
 
 *Changes since draft 0.11 (2026-10-26): a JSON Schema for every frame, HTTPS body and the capabilities document, published with the spec and shipped with the reference implementation; the text stays normative (§4). Profiles may list skills, in the shape of an A2A Agent Card skill (§21.1). A server may publish its realm's signing keys and its endpoints' identity keys as DID documents (`did:web`, `did:key`), mirrors of the DNS record and the key records (§24, §3.4.1 `did`). A server may serve A2A-style Agent Cards for the realm and for every listed endpoint, built from the profile and signed with the realm key under its DID (§21.5). Receipts: a sender may ask for `seen` and `done` receipts, which the recipient endpoint sends as replies under its site's policy (§6.7, §4.2 `airc-receipt`).*
 

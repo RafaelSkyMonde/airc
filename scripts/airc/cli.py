@@ -384,7 +384,7 @@ async def _listen_wait(c, args, handle, want, wait: float) -> int:
     try:
         ws = await WsSocket(c.hc).open()
     except (HttpClientError, OSError) as e:
-        print(f"airc listen: no WebSocket ({str(e)[:80]}); checking the inbox every 2 s instead", file=sys.stderr)
+        print(f"airc listen: no WebSocket ({str(e)[:80]}); pulling the inbox instead", file=sys.stderr)
         return None
     got = 0
     end = time.monotonic() + wait
@@ -540,8 +540,18 @@ async def _listen_run(c, args, handle, bound) -> int:
                 return r
         got = 0
         end = time.monotonic() + wait
-        while True:                                   # without the WebSocket, --wait checks the inbox every 2 s
-            for m in await c.hc.inbox():
+        from .httpclient import RateLimited
+        longpoll = wait and "longpoll" in c.hc.features
+        while True:                                   # without the WebSocket: long-polls (§3.4.7), else every 10 s
+            try:
+                left = end - time.monotonic()
+                batch = await c.hc.inbox(wait=min(25.0, left) if longpoll and left >= 1 else None)
+            except RateLimited as e:                  # the server limits pulls (spec §3.4.6): wait as it asks
+                if time.monotonic() + e.retry_after >= end:
+                    return 3
+                await asyncio.sleep(e.retry_after)
+                continue
+            for m in batch:
                 if not want(m):
                     continue                          # not what this call waits for: left queued, unacked
                 r = await handle(m)
@@ -551,7 +561,8 @@ async def _listen_run(c, args, handle, bound) -> int:
                     await c._handle(lambda _m, _r=r: _async_value(_r), m)
             if got or time.monotonic() >= end:
                 return 0 if got else 3
-            await asyncio.sleep(2)
+            if not longpoll:
+                await asyncio.sleep(max(0.0, min(10.0, end - time.monotonic())))
     if args.only_from or args.only_links:
         print("airc listen: --from and --links work only with --once (a running listener must take every message)", file=sys.stderr)
         return 2

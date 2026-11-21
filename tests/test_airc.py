@@ -415,7 +415,7 @@ class ServeFallbackTests(unittest.IsolatedAsyncioTestCase):
             features = {"ws"}
             displaced = set()
             def __init__(self): self.polls = 0
-            async def inbox(self, mx=50):
+            async def inbox(self, mx=50, wait=None):
                 self.polls += 1
                 return []
 
@@ -2686,7 +2686,7 @@ class FrontDoorTests(unittest.IsolatedAsyncioTestCase):
         return await asyncio.wait_for(c.messages().__anext__(), timeout)
 
     async def test_directory_by_default(self):
-        self.r.a.cfg["front"] = {"carol": {"about": "Sofia's research agents.", "entries": [{"agent": "desk", "note": "start here"}, {"agent": "secret", "hidden": True}]}}
+        self.r.a.cfg["front"] = {"carol": {"about": "Carol's research agents.", "entries": [{"agent": "desk", "note": "start here"}, {"agent": "secret", "hidden": True}]}}
         x = await self.r.client("a"); await x.bind(["alice/x"])
         ack = await x.send("//home.test/carol", "who is here?", frm="alice/x")
         self.assertEqual(ack["status"], "delivered"); self.assertIn("directory of 3 agents sent to you", ack["reason"])
@@ -2696,8 +2696,8 @@ class FrontDoorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(m["hdr"]["airc-directory"].split(), ["airc://home.test/carol/analyst", "airc://home.test/carol/desk",
                                                               "airc://home.test/carol/vault"])
         self.assertIn("//home.test/carol/desk — start here", m["body"]); self.assertIn("encrypted messages only", m["body"])
-        self.assertTrue(m["body"].split("\n")[2] == "Sofia's research agents.")
-        self.assertIn("Sofia's research agents.", self.r.a.address_page("/carol")[1])
+        self.assertTrue(m["body"].split("\n")[2] == "Carol's research agents.")
+        self.assertIn("Carol's research agents.", self.r.a.address_page("/carol")[1])
         self.assertNotIn("secret", m["body"]); self.assertNotIn("alice/other", m["body"])
         # replies and automatic messages are not answered, so front doors and echoes cannot loop
         ack = await x.send("//home.test/carol", "thanks", frm="alice/x", re_id=m["id"])
@@ -3207,6 +3207,53 @@ class HttpBindingTests(unittest.IsolatedAsyncioTestCase):
         from airc.httpclient import HttpClient
         return HttpClient(base or f"http://127.0.0.1:{HTTP_A}", signer or self.wk)
 
+    async def test_inbox_long_poll(self):
+        """§3.4.7: ?wait holds an empty inbox until a message comes or the server's hold ends; the frame states
+        the hold that applied; queued messages answer at once."""
+        import time as _t
+        from airc.httpclient import session_id
+        self.r.a.cfg["http"] = {"inbox_wait_max": 2}
+        hc = self._hc(); hc.session = session_id(); await hc.capabilities()
+        self.assertIn("longpoll", hc.features)
+        await hc.bind(["joe/lp"], mode="pull")
+        t0 = _t.monotonic()
+        r = await hc._request("GET", "/airc/v0/inbox?wait=10", read_timeout=20)      # asks 10, the server holds 2
+        self.assertEqual((r["msgs"], r["wait"]), ([], 2)); self.assertGreaterEqual(_t.monotonic() - t0, 1.8)
+        r = await hc._request("GET", "/airc/v0/inbox?wait=1", read_timeout=20)       # less than the maximum: kept
+        self.assertEqual(r["wait"], 1)
+        r = await hc._request("GET", "/airc/v0/inbox")                                # no wait: at once
+        self.assertEqual(r["wait"], 0)
+        x = await self.r.client("a")
+        t0 = _t.monotonic()
+        held = asyncio.ensure_future(hc.inbox(wait=10))
+        await asyncio.sleep(0.5)
+        await x.send("joe/lp", "ends the hold", frm="alice/x")
+        got = await asyncio.wait_for(held, 5)
+        self.assertEqual([m["body"] for m in got], ["ends the hold"]); self.assertLess(_t.monotonic() - t0, 1.8)
+        r = await hc._request("GET", "/airc/v0/inbox?wait=10", read_timeout=20)      # still queued (not acked): at once
+        self.assertEqual((len(r["msgs"]), r["wait"]), (1, 0))
+        await x.close()
+
+    async def test_inbox_empty_pull_limit(self):
+        """§3.4.7: past the limit, empty pulls get 429 rate_limited with Retry-After; pulls that return messages
+        never count."""
+        from airc.httpclient import session_id, RateLimited
+        self.r.a.cfg["http"] = {"inbox_empty_pulls_per_min": 2}
+        hc = self._hc(); hc.session = session_id(); await hc.capabilities()
+        await hc.bind(["joe/rl"], mode="pull")
+        x = await self.r.client("a")
+        await x.send("joe/rl", "keep me queued", frm="alice/x")
+        for _ in range(5):                                                            # a busy queue is never refused
+            self.assertEqual(len(await hc.inbox()), 1)
+        await hc.ack((await hc.inbox())[0]["id"])
+        self.assertEqual(await hc.inbox(), []); self.assertEqual(await hc.inbox(), [])  # two empty pulls: allowed
+        with self.assertRaises(RateLimited) as cm:                                    # the third pulls nothing more
+            await hc.inbox()
+        self.assertEqual(cm.exception.retry_after, 60)
+        with self.assertRaises(RateLimited):                                          # and the key waits the minute
+            await hc.inbox()
+        await x.close()
+
     async def test_peer_delivery_over_https(self):
         from airc.httpbind import HttpPeerLink
         desk = await self.r.client("b", ns_claim=["support"]); await desk.bind(["support/desk"])
@@ -3312,7 +3359,7 @@ class HttpBindingTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(task, 5)
         # a realm without the WebSocket: serve() polls the inbox
         hc2 = self._hc(); hc2.session = session_id(); await hc2.capabilities()
-        hc2.features = [f for f in hc2.features if f != "ws"]
+        hc2.features = [f for f in hc2.features if f not in ("ws", "longpoll")]
         s2 = HttpRelaySession(hc2); await s2.bind(["joe/other"])
         modes2 = []
         t2 = asyncio.ensure_future(s2.serve(handler, poll=0.2, on_mode=modes2.append))
@@ -4602,7 +4649,7 @@ class CardTests(unittest.IsolatedAsyncioTestCase):
         st, ct, card = await self._get("/.well-known/agent-card.json")
         self.assertEqual(st, 200, card); self.assertTrue(ct.startswith("application/json"))
         self.assertEqual(card["name"], "home.test")
-        self.assertEqual(card["supportedInterfaces"], [{"url": "airc://home.test/", "protocolBinding": "AIRC", "protocolVersion": "0.12"}])
+        self.assertEqual(card["supportedInterfaces"], [{"url": "airc://home.test/", "protocolBinding": "AIRC", "protocolVersion": __import__("airc").__spec_draft__}])
         self.assertEqual(card["capabilities"]["extensions"][0]["uri"], "https://airc.dev/docs/transport")
         # the signature verifies with the key the kid's DID document publishes
         kid = CARDS.protected_kid(card)

@@ -452,6 +452,41 @@ class HttpFace:
         body = await reader.readexactly(length) if length else b""
         return method.upper(), target, headers, body
 
+    INBOX_EMPTY_PULLS_PER_MIN = 6   # default for http.inbox_empty_pulls_per_min; 0 turns the limit off
+    INBOX_WAIT_MAX = 25             # default for http.inbox_wait_max: the longest a long-poll is held (§3.4.7)
+
+    def inbox_wait_max(self) -> int:
+        return int((self.server.cfg.get("http") or {}).get("inbox_wait_max", self.INBOX_WAIT_MAX))
+
+    def _pull_state(self, kid: str) -> dict:
+        pulls = getattr(self, "_pulls", None)
+        if pulls is None:
+            pulls = self._pulls = {}
+        if len(pulls) > 10000:                                     # forget keys idle for a minute
+            now = time.monotonic()
+            for k in [k for k, v in pulls.items() if now > v["until"] and (not v["times"] or now - v["times"][-1] > 60)]:
+                pulls.pop(k, None)
+        return pulls.setdefault(kid, {"times": [], "until": 0.0})
+
+    def _pull_held(self, kid: str) -> int:
+        """§3.4.7: seconds this key must still wait before pulling (Retry-After), or 0."""
+        st = self._pull_state(kid)
+        left = st["until"] - time.monotonic()
+        return max(1, int(left + 0.999)) if left > 0 else 0
+
+    def _pull_empty(self, kid: str) -> bool:
+        """A pull that returned nothing. Past http.inbox_empty_pulls_per_min (default 6) in a minute, the key
+        waits a minute. Pulls that return messages never count, so draining a busy queue is never refused."""
+        limit = (self.server.cfg.get("http") or {}).get("inbox_empty_pulls_per_min", self.INBOX_EMPTY_PULLS_PER_MIN)
+        if not limit:
+            return False
+        st, now = self._pull_state(kid), time.monotonic()
+        st["times"] = [t for t in st["times"] if now - t < 60] + [now]
+        if len(st["times"]) > limit:
+            st["until"], st["times"] = now + 60, []
+            return True
+        return False
+
     async def _respond(self, writer, status: int, obj, ctype="application/json", extra: dict | None = None):
         data = obj if isinstance(obj, (bytes, bytearray)) else json.dumps(obj, ensure_ascii=False).encode()
         reason = {200: "OK", 204: "No Content", 302: "Found", 502: "Bad Gateway", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 409: "Conflict",
@@ -589,7 +624,7 @@ class HttpFace:
 
     async def _dispatch(self, method, target, headers, body, writer, reader=None):
         url = urllib.parse.urlsplit(target)
-        path, q = url.path, urllib.parse.parse_qs(url.query)
+        path, q = url.path, urllib.parse.parse_qs(url.query, keep_blank_values=True)
         srv = self.server
 
         def jbody():
@@ -619,7 +654,7 @@ class HttpFace:
             ts = int(time.time())
             doc = {"t": "capabilities", "realm": srv.realm, "proto": PROTO, "bindings": ["https"] + (["stream"] if srv.cfg.get("peer_listen") else []),
                    "kids": [k for k, _p in self.realm_keys()], "nonce": nonce, "ts": ts, "server": f"aircd/{__version__}",
-                   "features": ["keys", "profile", "leases", "bin", "ws"]}
+                   "features": ["keys", "profile", "leases", "bin", "ws", "longpoll"]}
             if srv.signer:
                 doc["did"] = DID.web_did(self.did_host())                    # §24: this realm's DID; its document is below
                 doc["features"].append("did")
@@ -887,18 +922,45 @@ class HttpFace:
             return await self._respond(writer, 200, out)
 
         if method == "GET" and op == "inbox":
-            mx = min(int((q.get("max") or ["50"])[0]), 200)
-            out = []
-            for ns in link.namespaces:
-                for m in srv.spool.peek(ns, mx):
-                    try:
-                        to = A.parse(m["to"])
-                    except A.AddressError:
-                        continue
-                    if srv._client_for(to) is link:            # the messages this session's live binds win (§4.3)
-                        out.append(m)
-            out.sort(key=lambda m: m.get("ts", 0))
-            doc = {"t": "inbox", "msgs": out[:mx]}
+            held = self._pull_held(link.kid)
+            if held:
+                return await self._respond(writer, 429, {"t": "error", "code": "rate_limited", "retry_after": held,
+                                                         "reason": "this key pulls an empty inbox too often; wait, long-poll or use the WebSocket"},
+                                           extra={"Retry-After": str(held)})
+            mx = min(int((q.get("max") or [""])[0] or 50), 200)
+
+            def queued():
+                out = []
+                for ns in link.namespaces:
+                    for m in srv.spool.peek(ns, mx):
+                        try:
+                            to = A.parse(m["to"])
+                        except A.AddressError:
+                            continue
+                        if srv._client_for(to) is link:        # the messages this session's live binds win (§4.3)
+                            out.append(m)
+                out.sort(key=lambda m: m.get("ts", 0))
+                return out[:mx]
+
+            out, hold = queued(), 0
+            if not out and "wait" in q:                        # §3.4.7: hold until a message comes or the wait ends
+                hold = self.inbox_wait_max()
+                try:
+                    asked = (q.get("wait") or [""])[0]
+                    if asked:
+                        hold = max(0, min(hold, int(float(asked))))
+                except ValueError:
+                    pass
+                end = time.monotonic() + hold
+                while not out and time.monotonic() < end:
+                    await asyncio.sleep(0.2)
+                    out = queued()
+            if not out and self._pull_empty(link.kid):            # past the limit: this pull is refused too
+                held = self._pull_held(link.kid)
+                return await self._respond(writer, 429, {"t": "error", "code": "rate_limited", "retry_after": held,
+                                                         "reason": "this key pulls an empty inbox too often; wait, long-poll or use the WebSocket"},
+                                           extra={"Retry-After": str(held)})
+            doc = {"t": "inbox", "msgs": out, "wait": hold}
             if link.displaced:
                 doc["displaced"], link.displaced = link.displaced, []
             return await self._respond(writer, 200, doc)
@@ -931,7 +993,7 @@ class HttpFace:
 
         if method == "GET" and op == "events":
             from .events import EventLog
-            since = float((q.get("since") or ["0"])[0])
+            since = float((q.get("since") or [""])[0] or 0)
             kinds = set((q.get("kinds") or [""])[0].split(",")) - {""}
             prefixes = srv._ns_keys(link) or []
             evs = [e for e in EventLog.tail(srv.events.path, 2000)

@@ -43,6 +43,13 @@ class HttpClientError(Exception):
     pass
 
 
+class RateLimited(HttpClientError):
+    """429: the server limits how often this key may pull its inbox (spec §3.4.6). Wait retry_after seconds."""
+    def __init__(self, msg, retry_after: float = 60.0):
+        super().__init__(msg)
+        self.retry_after = retry_after
+
+
 def session_id(stable: str | None = None) -> str:
     """This process's session id (spec §4.3.1): random, or derived from a stable value such as
     $AIRC_SESSION. A stable value that is not a valid id itself (16-64 of A-Z a-z 0-9 _ -) is hashed
@@ -158,7 +165,7 @@ class HttpClient:
         for c in idle:
             c.close()
 
-    def _request_sync(self, method: str, path: str, obj=None, auth=True, raw: bool = False):
+    def _request_sync(self, method: str, path: str, obj=None, auth=True, raw: bool = False, read_timeout: float | None = None):
         framed = isinstance(obj, dict) and "_bin" in obj           # a msg with a binary section (§22)
         body = wire.frame_bytes(obj) if framed else json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode() if obj is not None else b""
         headers = {"Content-Type": "application/airc-frame" if framed else "application/json", "Accept": "application/json",
@@ -171,6 +178,9 @@ class HttpClient:
             c, reused = self._take_http_connection()
             reusable = False
             try:
+                c.timeout = read_timeout or self.timeout              # a long-poll waits longer than other requests
+                if c.sock is not None:
+                    c.sock.settimeout(c.timeout)
                 c.request(method, path, body=body if body else None, headers=headers)
                 r = c.getresponse()
                 data = r.read()
@@ -193,6 +203,12 @@ class HttpClient:
                                   f"a proxy or firewall may have answered instead")
         if r.status == 401:
             raise HttpClientError(f"unauthorized: {out.get('reason') if isinstance(out, dict) else out}")
+        if r.status == 429:
+            try:
+                wait = float(r.getheader("Retry-After") or (out.get("retry_after") if isinstance(out, dict) else 0) or 60)
+            except ValueError:
+                wait = 60.0
+            raise RateLimited(f"HTTP 429: {out.get('reason') if isinstance(out, dict) else out}", max(1.0, min(wait, 3600.0)))
         if r.status == 409 and isinstance(out, dict) and out.get("error") == "name_held":
             raise NameHeld(out)
         if isinstance(out, dict) and out.get("displaced"):
@@ -201,12 +217,12 @@ class HttpClient:
             raise HttpClientError(f"HTTP {r.status}: {out.get('reason') if isinstance(out, dict) else out}")
         return out
 
-    async def _request(self, method, path, obj=None, auth=True, raw=False):
+    async def _request(self, method, path, obj=None, auth=True, raw=False, read_timeout=None):
         # Sends stay on HTTP even while a WebSocket is open: measured on airc.dev, a send over the
         # socket (client -> Fanout -> edge, ack back through the publish API) is slower than a POST on a
         # kept-alive connection (0.9 s against 0.46 s per tool call), and the pool removes the
         # per-request TLS setup that made the socket route attractive.
-        return await asyncio.get_running_loop().run_in_executor(None, self._request_sync, method, path, obj, auth, raw)
+        return await asyncio.get_running_loop().run_in_executor(None, self._request_sync, method, path, obj, auth, raw, read_timeout)
 
     async def fetch_bin(self, m: dict) -> dict:
         """m with its binary section (§22) fetched and checked, when it declares one."""
@@ -253,8 +269,14 @@ class HttpClient:
             wire.attach_bin(m, bin)
         return await self._request("POST", "/airc/v0/send", m)
 
-    async def inbox(self, mx: int = 50) -> list[dict]:
-        r = await self._request("GET", f"/airc/v0/inbox?max={mx}")
+    async def inbox(self, mx: int = 50, wait: float | None = None) -> list[dict]:
+        """Queued messages, oldest first. wait (seconds) asks for a long-poll where the realm lists
+        "longpoll" (§3.4.7): held until a message comes or the server's hold (at most wait) ends."""
+        if wait and "longpoll" in self.features:
+            n = max(1, int(wait))
+            r = await self._request("GET", f"/airc/v0/inbox?max={mx}&wait={n}", read_timeout=n + 15)
+        else:
+            r = await self._request("GET", f"/airc/v0/inbox?max={mx}")
         return r.get("msgs", []) if isinstance(r, dict) else []
 
     async def ack(self, msg_id: str, status: str = "delivered", reason: str = "", code: str | None = None, by: str | None = None) -> None:
@@ -590,8 +612,8 @@ class HttpRelaySession:
         self.bound = list(b.get("names", names))
         return self.bound
 
-    async def _drain(self, handler):
-        for m in await self.hc.inbox():
+    async def _drain(self, handler, wait: float | None = None):
+        for m in await self.hc.inbox(wait=wait):
             await self._handle(handler, m)
         if self.bound and all(n in self.hc.displaced for n in self.bound):
             raise Displaced(self.bound)
@@ -621,8 +643,9 @@ class HttpRelaySession:
             await ws.close()
 
     WS_RETRY = 300.0       # while polling after the WebSocket failed, try it again this often (seconds)
+    LONGPOLL = 25.0        # the hold asked for on a long-poll (§3.4.7); the server may hold less
 
-    async def serve(self, handler, poll: float = 5.0, on_mode=None):
+    async def serve(self, handler, poll: float = 10.0, on_mode=None):
         """Take messages and ack each. A realm that offers the WebSocket (feature "ws", §3.4.6) gets one socket
         that carries everything and keeps the lease, reopened when it closes. Without it (the realm does not
         list ws, or the socket cannot be opened three times running), poll the inbox every poll seconds; when
@@ -649,13 +672,22 @@ class HttpRelaySession:
                             break
                         say(f"push: the WebSocket failed ({str(e)[:80]}); reopening")
                     await asyncio.sleep(2 * max(1, fails))
-                say(f"polling every {poll:g} s: {why}; trying the WebSocket again in {self.WS_RETRY:g} s")
+            longpoll = "longpoll" in self.hc.features             # §3.4.7: held pulls, no sleeping between them
+            how = f"long-polling ({self.LONGPOLL:g} s holds)" if longpoll else f"polling every {poll:g} s"
+            if "ws" in self.hc.features:
+                say(f"{how}: {why}; trying the WebSocket again in {self.WS_RETRY:g} s")
             else:
-                say(f"polling every {poll:g} s: {why}")
+                say(f"{how}: {why}")
             until = loop.time() + self.WS_RETRY
             while "ws" not in self.hc.features or loop.time() < until:
-                await self._drain(handler)
-                await asyncio.sleep(poll)
+                try:
+                    await self._drain(handler, wait=self.LONGPOLL if longpoll else None)
+                except RateLimited as e:                     # pulling faster than the server allows: slow down
+                    say(f"pulling: the server asks to wait {e.retry_after:g} s")
+                    await asyncio.sleep(e.retry_after)
+                    continue
+                if not longpoll:
+                    await asyncio.sleep(poll)
 
     async def _handle(self, handler, m):
         if m.get("id") in self._recent:

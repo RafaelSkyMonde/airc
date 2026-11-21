@@ -105,6 +105,32 @@ her off. Her page, `/eliza`, gives her limits and says how conversations are
 kept. Operational details (the model key, caps and storage) are in the
 comment above her code in `src/aircd_edge/aircd_edge.cpp`.
 
+### Pulls: long-polls and the empty-pull limit
+
+`GET /airc/v0/inbox?wait=N` (spec §3.4.7) is handed to Fanout before it is
+authenticated, like the WebSocket; Fanout sends it back with a `Grip-Sig`, and
+when nothing is queued the edge answers with `Grip-Hold: response` on the
+session's channel and `Grip-Timeout` of `N` cut to `inbox_wait_max`
+(`airc_config`, default 25). A message for a session whose last pull was a
+long-poll (marked in its lease, `"<ts> lp"`) is published to that channel with
+an `http-response` format as well, which ends the hold. Without Fanout
+(viceroy) `longpoll` is not listed and `wait` is ignored.
+
+Fanout sometimes sends a held long-poll back to the edge unchanged (seen on
+stage when a message is published just before the hold is in place), with the
+nonce it already used. The edge accepts such a copy when it carries a valid
+`Grip-Sig`, is a long-poll of the inbox, and was signed no longer ago than
+`inbox_wait_max` plus 10 s; anything else with a used nonce is still refused.
+So a captured long-poll could be replayed within that window, not later; a
+pull changes nothing, and capturing one needs a request from inside TLS.
+
+Empty pulls are counted per key with the edge rate counter `airc_pull_rc`;
+past `inbox_empty_pulls_per_min` (`airc_config`, default 6; 0 off) the key
+goes into the penalty box `airc_pull_pb` for a minute and gets 429
+`rate_limited`, `Retry-After: 60`. Both resources are declared in the
+service's `fastly.toml`. Rate counters are per POP and approximate: this is a
+speed bump against runaway pollers, not a meter.
+
 ### Name reservation
 
 Registering a name is a conditional write (insert only if absent). On Fastly

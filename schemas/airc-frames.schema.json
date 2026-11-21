@@ -346,7 +346,8 @@
     "recovery_required",
     "code_refused",
     "bad_code",
-    "throttled"
+    "throttled",
+    "rate_limited"
    ],
    "minLength": 1,
    "description": "§14.2 `error` frame codes. Open: over HTTPS a server may use codes of its own, and §3.4.4/§3.4.5 add registration and membership codes; the known values are listed as examples."
@@ -453,6 +454,7 @@
      "profile",
      "leases",
      "ws",
+     "longpoll",
      "bin",
      "did",
      "cards"
@@ -2729,6 +2731,11 @@
     "error": {
      "type": "string",
      "description": "§3.4.2: a 409 name_held/channel_taken body carries its code here"
+    },
+    "retry_after": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "§3.4.7: with 429 `rate_limited`, seconds to wait before pulling again (also the `Retry-After` header)"
     }
    },
    "required": [
@@ -3219,7 +3226,7 @@
   },
   "inbox": {
    "type": "object",
-   "description": "§3.4.2 the `GET /airc/v0/inbox` response: queued wire-form messages, oldest first; §4.3.1 `displaced`. §3.4.6: `{\"t\":\"inbox\"}` alone over the WebSocket means more is waiting.",
+   "description": "§3.4.2 the `GET /airc/v0/inbox` response: queued wire-form messages, oldest first; §4.3.1 `displaced`. §3.4.6: `{\"t\":\"inbox\"}` alone over the WebSocket means more is waiting. §3.4.7: `wait`, the hold applied to a long-poll.",
    "properties": {
     "t": {
      "const": "inbox",
@@ -3237,6 +3244,11 @@
      "items": {
       "$ref": "#/$defs/boundName"
      }
+    },
+    "wait": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "§3.4.7: the hold that applied to a long-poll (`?wait=N` cut to the server's maximum), 0 when the server did not hold the request"
     }
    },
    "required": [
